@@ -647,6 +647,9 @@ init(int argc, char **argv)
 		case UPNPALBUMART_NAMES:
 			album_art_names = parse_delimited_list_of_options(ary_options[i].value, "/");
 			break;
+		case UPNPMETADATA_NAMES:
+			metadata_names = parse_delimited_list_of_options(ary_options[i].value, "/");
+			break;
 		case UPNPDBDIR:
 			path = realpath(ary_options[i].value, buf);
 			if (!path)

@@ -156,6 +156,37 @@ check_for_captions(const char *path, int64_t detailID)
 	}
 }
 
+char *
+check_for_nfo_name(const char *path)
+{
+	struct linked_names_s *metadata_name;
+	char * nfo = malloc(MAXPATHLEN);
+	char * path_cpy = strdup(path);
+	char * dir = dirname(path_cpy);
+
+	for (metadata_name = metadata_names; metadata_name; metadata_name = metadata_name->next)
+	{
+		snprintf(nfo, MAXPATHLEN, "%s/%s", dir, metadata_name->name);
+		if (access(nfo, R_OK) == 0)
+		{
+			goto return_result;
+		}
+	}
+
+	strncpy(nfo, path, MAXPATHLEN);
+	strip_ext(nfo);
+	strncat(nfo, ".nfo", 4);
+	if (access(nfo, R_OK) != 0)
+	{
+		free(nfo);
+		nfo = NULL;
+	}
+
+return_result:
+	free(path_cpy);
+	return nfo;
+}
+
 void
 parse_nfo(const char *path, metadata_t *m)
 {
@@ -663,7 +694,6 @@ GetVideoMetadata(const char *path, char *name)
 	enum audio_profiles audio_profile = PROFILE_AUDIO_UNKNOWN;
 	char fourcc[4];
 	int64_t album_art = 0;
-	char nfo[MAXPATHLEN], *ext;
 	struct song_metadata video;
 	metadata_t m;
 	uint32_t free_flags = 0xFFFFFFFF;
@@ -1490,15 +1520,13 @@ video_no_dlna:
 	}
 #endif
 
-	strcpy(nfo, path);
-	ext = strrchr(nfo, '.');
-	if( ext )
 	{
-		strcpy(ext+1, "nfo");
-		if( access(nfo, F_OK) == 0 )
+		char * nfo = check_for_nfo_name(path);
+		if (nfo)
 		{
 			parse_nfo(nfo, &m);
 		}
+		free(nfo);
 	}
 
 	if( !m.mime )
