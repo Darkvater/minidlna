@@ -474,6 +474,26 @@ static void init_nls(void)
 #endif
 }
 
+struct linked_names_s * parse_delimited_list_of_options(char * input, const char * delimiter) {
+	struct linked_names_s * linked_entry = NULL, * return_value;
+	char * word;
+	for (return_value = NULL; (word = strtok(input, delimiter)); input = NULL) {
+		struct linked_names_s * entry = calloc(1, sizeof(struct linked_names_s));
+		int len = strlen(word);
+		if (word[len - 1] == '*')
+		{
+			word[len - 1] = '\0';
+			entry->wildcard = 1;
+		}
+		entry->name = strdup(word);
+		if (return_value) linked_entry->next = entry;
+		else return_value = entry;
+
+		linked_entry = entry;
+	}
+	return return_value;
+}
+
 /* init phase :
  * 1) read configuration file
  * 2) read command line arguments
@@ -625,26 +645,7 @@ init(int argc, char **argv)
 				media_dirs = media_dir;
 			break;
 		case UPNPALBUMART_NAMES:
-			for (string = ary_options[i].value; (word = strtok(string, "/")); string = NULL)
-			{
-				struct album_art_name_s * this_name = calloc(1, sizeof(struct album_art_name_s));
-				int len = strlen(word);
-				if (word[len-1] == '*')
-				{
-					word[len-1] = '\0';
-					this_name->wildcard = 1;
-				}
-				this_name->name = strdup(word);
-				if (album_art_names)
-				{
-					struct album_art_name_s * all_names = album_art_names;
-					while( all_names->next )
-						all_names = all_names->next;
-					all_names->next = this_name;
-				}
-				else
-					album_art_names = this_name;
-			}
+			album_art_names = parse_delimited_list_of_options(ary_options[i].value, "/");
 			break;
 		case UPNPDBDIR:
 			path = realpath(ary_options[i].value, buf);

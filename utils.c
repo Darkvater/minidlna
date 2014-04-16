@@ -420,7 +420,7 @@ is_caption(const char * file)
 int
 is_album_art(const char * name)
 {
-	struct album_art_name_s * album_art_name;
+	struct linked_names_s * album_art_name;
 
 	/* Check if this file name matches one of the default album art names */
 	for( album_art_name = album_art_names; album_art_name; album_art_name = album_art_name->next )

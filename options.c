@@ -183,7 +183,7 @@ void
 freeoptions(void)
 {
 	struct media_dir_s *media_path, *last_path;
-	struct album_art_name_s *art_names, *last_name;
+	struct linked_names_s *art_names, *last_name;
 	
 	media_path = media_dirs;
 	while (media_path)
