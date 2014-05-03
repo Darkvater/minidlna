@@ -55,6 +55,12 @@
 #define FLAG_MIME	0x00000100
 #define FLAG_DURATION	0x00000200
 #define FLAG_RESOLUTION	0x00000400
+#define FLAG_BITRATE	0x00000800
+#define FLAG_FREQUENCY	0x00001000
+#define FLAG_BPS	0x00002000
+#define FLAG_CHANNELS	0x00004000
+#define FLAG_ROTATION	0x00008000
+#define FLAG_DESCRIPTION 0x00010000
 
 /* Audio profile flags */
 enum audio_profiles {
@@ -269,7 +275,8 @@ parse_nfo(const char *path, metadata_t *m)
 	set_value_from_xml(&m->date, &xml, "year");
 	set_value_from_xml(&m->date, &xml, "capturedate");
 
-	set_value_from_xml(&m->comment, &xml, "plot");
+	set_value_from_xml(&m->comment, &xml, "tagline");
+	set_value_from_xml(&m->description, &xml, "plot");
 	set_value_from_xml(&m->creator, &xml, "director");
 	set_value_from_xml(&m->mime, &xml, "mime");
 	set_value_list_from_xml(&m->genre, &xml, "genre");
@@ -296,6 +303,8 @@ free_metadata(metadata_t *m, uint32_t flags)
 		free(m->date);
 	if( flags & FLAG_COMMENT )
 		free(m->comment);
+	if( flags & FLAG_DESCRIPTION )
+		free(m->description);
 	if( flags & FLAG_DLNA_PN )
 		free(m->dlna_pn);
 	if( flags & FLAG_MIME )
@@ -498,12 +507,12 @@ GetAudioMetadata(const char *path, char *name)
 
 	ret = sql_exec(db, "INSERT into DETAILS"
 	                   " (PATH, SIZE, TIMESTAMP, DURATION, CHANNELS, BITRATE, SAMPLERATE, DATE,"
-	                   "  TITLE, CREATOR, ARTIST, ALBUM, GENRE, COMMENT, DISC, TRACK, DLNA_PN, MIME, ALBUM_ART) "
+	                   "  TITLE, CREATOR, ARTIST, ALBUM, GENRE, COMMENT, DESCRIPTION, DISC, TRACK, DLNA_PN, MIME, ALBUM_ART) "
 	                   "VALUES"
-	                   " (%Q, %lld, %lld, '%s', %d, %d, %d, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %d, %d, %Q, '%s', %lld);",
-	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, song.channels, song.bitrate,
-	                   song.samplerate, m.date, m.title, m.creator, m.artist, m.album, m.genre, m.comment, song.disc,
-	                   song.track, m.dlna_pn, song.mime?song.mime:m.mime, album_art);
+	                   " (%Q, %lld, %lld, '%s', %d, %d, %d, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %d, %d, %Q, '%s', %lld);",
+	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, song.channels, song.bitrate, song.samplerate, m.date,
+	                   m.title, m.creator, m.artist, m.album, m.genre, m.comment, m.description, song.disc, song.track,
+	                   m.dlna_pn, song.mime?song.mime:m.mime, album_art);
 	if( ret != SQLITE_OK )
 	{
 		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
@@ -1582,12 +1591,12 @@ video_no_dlna:
 
 	ret = sql_exec(db, "INSERT into DETAILS"
 	                   " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
-	                   "  TITLE, CREATOR, ARTIST, GENRE, COMMENT, DLNA_PN, MIME, ALBUM_ART) "
+	                   "  TITLE, CREATOR, ARTIST, GENRE, COMMENT, DESCRIPTION, DLNA_PN, MIME, ALBUM_ART) "
 	                   "VALUES"
-	                   " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, '%q', %Q, %Q, %Q, %Q, %Q, '%q', %lld);",
+	                   " (%Q, %lld, %lld, %Q, %Q, %Q, %Q, %Q, %Q, '%q', %Q, %Q, %Q, %Q, %Q, %Q, '%q', %lld);",
 	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration,
 	                   m.date, m.channels, m.bitrate, m.frequency, m.resolution,
-			   m.title, m.creator, m.artist, m.genre, m.comment, m.dlna_pn,
+			   m.title, m.creator, m.artist, m.genre, m.comment, m.description, m.dlna_pn,
                            m.mime, album_art);
 	if( ret != SQLITE_OK )
 	{
