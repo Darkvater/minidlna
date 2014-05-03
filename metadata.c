@@ -266,11 +266,14 @@ parse_nfo(const char *path, metadata_t *m)
 		free(esc_tag);
 	}
 
+	set_value_from_xml(&m->date, &xml, "year");
 	set_value_from_xml(&m->date, &xml, "capturedate");
 
 	set_value_from_xml(&m->comment, &xml, "plot");
+	set_value_from_xml(&m->creator, &xml, "director");
 	set_value_from_xml(&m->mime, &xml, "mime");
 	set_value_list_from_xml(&m->genre, &xml, "genre");
+	set_value_list_from_xml(&m->artist, &xml, "name");
 
 	ClearNameValueList(&xml);
 	fclose(nfo);
