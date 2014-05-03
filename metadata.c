@@ -187,6 +187,45 @@ return_result:
 	return nfo;
 }
 
+char *
+unescape_escape_tag(const char *tag)
+{
+	char *esc_tag = unescape_tag(tag, 1);
+	char *dest = escape_tag(esc_tag, 1);
+	free(esc_tag);
+	return dest;
+}
+
+void
+set_value_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
+{
+	char *val = GetValueFromNameValueList(xml, name);
+	if (val)
+	{
+		free(*dest);
+		*dest = unescape_escape_tag(val);
+	}
+}
+
+void
+set_value_list_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
+{
+	char *result = calloc(MAXPATHLEN, MAXPATHLEN);
+	const struct NameValue *resume = NULL;
+	char *val;
+
+	while ((val = GetValueFromNameValueListWithResumeSupport(xml, name, &resume)))
+	{
+		if (*dest != NULL) free(*dest);
+		char *escaped_val = unescape_escape_tag(val);
+		x_strlcat(result, ",", MAXPATHLEN);
+		x_strlcat(result, escaped_val, MAXPATHLEN);
+		free(escaped_val);
+	}
+	*dest = strdup(&result[1]); /* get rid of starting comma */
+	free(result);
+}
+
 void
 parse_nfo(const char *path, metadata_t *m)
 {
@@ -227,37 +266,11 @@ parse_nfo(const char *path, metadata_t *m)
 		free(esc_tag);
 	}
 
-	val = GetValueFromNameValueList(&xml, "plot");
-	if( val ) {
-		char *esc_tag = unescape_tag(val, 1);
-		m->comment = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
+	set_value_from_xml(&m->date, &xml, "capturedate");
 
-	val = GetValueFromNameValueList(&xml, "capturedate");
-	if( val ) {
-		char *esc_tag = unescape_tag(val, 1);
-		m->date = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
-
-	val = GetValueFromNameValueList(&xml, "genre");
-	if( val )
-	{
-		free(m->genre);
-		char *esc_tag = unescape_tag(val, 1);
-		m->genre = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
-
-	val = GetValueFromNameValueList(&xml, "mime");
-	if( val )
-	{
-		free(m->mime);
-		char *esc_tag = unescape_tag(val, 1);
-		m->mime = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
+	set_value_from_xml(&m->comment, &xml, "plot");
+	set_value_from_xml(&m->mime, &xml, "mime");
+	set_value_list_from_xml(&m->genre, &xml, "genre");
 
 	ClearNameValueList(&xml);
 	fclose(nfo);

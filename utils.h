@@ -73,6 +73,8 @@ static inline int is_dir(const struct dirent *d)
 #endif
 }
 int xasprintf(char **strp, char *fmt, ...) __attribute__((__format__ (__printf__, 2, 3)));
+void x_strlcat(char *dst, const char *src, size_t size);
+void x_strlcpy(char *dst, const char *src, size_t size);
 int ends_with(const char * haystack, const char * needle);
 char *trim(char *str);
 char *strstrc(const char *s, const char *p, const char t);

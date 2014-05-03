@@ -63,6 +63,10 @@ char *
 GetValueFromNameValueList(struct NameValueParserData * pdata,
                           const char * Name);
 
+char *
+GetValueFromNameValueListWithResumeSupport(struct NameValueParserData * pdata,
+const char * Name, struct NameValue const ** resume);
+
 /* GetValueFromNameValueListIgnoreNS() */
 char *
 GetValueFromNameValueListIgnoreNS(struct NameValueParserData * pdata,
