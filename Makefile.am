@@ -28,7 +28,8 @@ minidlnad_SOURCES = minidlna.c upnphttp.c upnpdescgen.c upnpsoap.c \
 			sql.c utils.c metadata.c scanner.c inotify.c \
 			tivo_utils.c tivo_beacon.c tivo_commands.c \
 			playlist.c image_utils.c albumart.c log.c \
-			tagutils/tagutils.c
+			tagutils/tagutils.c \
+            naturalsort.c
 
 #if NEED_VORBIS
 vorbisflag = -lvorbis
