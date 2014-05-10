@@ -45,6 +45,7 @@
 #include "sql.h"
 #include "scanner.h"
 #include "metadata.h"
+#include "captions.h"
 #include "albumart.h"
 #include "playlist.h"
 #include "log.h"
@@ -298,7 +299,7 @@ inotify_insert_file(char * name, const char * path)
 	if( is_image(path) )
 		update_if_album_art(path);
 	else if( is_caption(path) )
-		check_for_captions(path, 0);
+		add_caption_if_has_media(path);
 
 	/* Check if we're supposed to be scanning for this file type in this directory */
 	while( media_path )
