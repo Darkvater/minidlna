@@ -32,15 +32,15 @@
 #include "log.h"
 
 static void
-add_caption(const char *path, int64_t detailID)
+add_caption(int64_t detailID, const char *path, const char *language)
 {
 	if (detailID && access(path, R_OK) == 0)
 	{
 		DPRINTF(E_DEBUG, L_METADATA, "Adding caption file: %s\n", path);
 		sql_exec(db, "INSERT into CAPTIONS"
-			" (ID, PATH) "
+			" (MEDIA_ID, PATH, LANGUAGE, DEFAULT_ITEM) "
 			"VALUES"
-			" (%lld, %Q)", detailID, path);
+			" (%lld, %Q, %Q, %d)", detailID, path, language, language == NULL ? 1 : 0);
 	}
 }
 
@@ -50,6 +50,17 @@ get_filename_only(char *path)
 	path = basename(path);
 	strip_ext(path);
 	return path;
+}
+
+/* return only the portion between media and its extension; which
+ * we classify as the language */
+static char *
+get_caption_language(const char *media, char *caption)
+{
+	size_t media_length = strlen(media);
+	/* we assume at this point caption is longer than media */
+	char *caption_language = &caption[media_length + 1];
+	return strip_ext(caption_language) == NULL ? NULL : caption_language;
 }
 
 void
@@ -70,14 +81,14 @@ check_for_captions(const char *path, int64_t detailID)
 	media_name = get_filename_only(mypath);
 	while ((dp = readdir(dirp)) != NULL)
 	{
-		const char *filename = dp->d_name;
+		char *filename = dp->d_name;
 		if (is_caption(filename)) {
 			DPRINTF(E_MAXDEBUG, L_METADATA, "New file %s looks like a caption file.\n", filename);
 			if (strncmp(media_name, filename, strlen(media_name)) == 0)
 			{
 				char caption_path[MAXPATHLEN];
 				snprintf(caption_path, sizeof(caption_path), "%s/%s", dir_name, filename);
-				add_caption(caption_path, detailID);
+				add_caption(detailID, caption_path, get_caption_language(media_name, filename));
 			}
 		}
 	}
@@ -117,7 +128,7 @@ add_caption_if_has_media(const char *path)
 			if (strncmp(media, caption, strlen(media)) == 0) {
 				char *id = sql_result[2];
 				int64_t detailID = strtoll(id, NULL, 10);
-				add_caption(path, detailID);
+				add_caption(detailID, path, get_caption_language(media, caption));
 			}
 			free(caption_path);
 		}
@@ -126,4 +137,23 @@ add_caption_if_has_media(const char *path)
 
 	free(file);
 	if (nRows == 0) DPRINTF(E_MAXDEBUG, L_METADATA, "No media file found for caption %s.\n", path);
+}
+
+int
+has_caption_with_id(int64_t ID)
+{
+	int id = sql_get_int_field(db, "SELECT MEDIA_ID from CAPTIONS where MEDIA_ID = '%lld'", ID);
+	return id > 0 ? 1 : 0;
+}
+
+char*
+get_caption(int64_t ID)
+{
+	return sql_get_text_field(db, "SELECT PATH from CAPTIONS where MEDIA_ID = %lld ORDER BY DEFAULT_ITEM DESC LIMIT 1", ID);
+}
+
+int
+delete_caption(const char *path)
+{
+	return sql_exec(db, "DELETE from CAPTIONS where PATH = '%q'", path);
 }

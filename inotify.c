@@ -539,10 +539,8 @@ inotify_remove_file(const char * path)
 	int64_t detailID;
 	int rows, playlist;
 
-	if( is_caption(path) )
-	{
-		return sql_exec(db, "DELETE from CAPTIONS where PATH = '%q'", path);
-	}
+	if (is_caption(path)) return delete_caption(path);
+
 	/* Invalidate the scanner cache so we don't insert files into non-existent containers */
 	valid_cache = 0;
 	playlist = is_playlist(path);

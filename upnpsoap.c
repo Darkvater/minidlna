@@ -66,6 +66,7 @@
 #include "upnphttp.h"
 #include "upnpsoap.h"
 #include "upnpreplyparse.h"
+#include "captions.h"
 #include "getifaddr.h"
 #include "scanner.h"
 #include "sql.h"
@@ -776,7 +777,8 @@ callback(void *args, int argc, char **argv, char **azColName)
 			if( (passed_args->flags & FLAG_CAPTION_RES) ||
 			    (passed_args->filter & (FILTER_SEC_CAPTION_INFO_EX|FILTER_PV_SUBTITLE)) )
 			{
-				if( sql_get_int_field(db, "SELECT ID from CAPTIONS where ID = '%s'", detailID) > 0 )
+				int64_t id = strtoll(detailID, NULL, 10);
+				if (has_caption_with_id(id) > 0)
 					passed_args->flags |= FLAG_HAS_CAPTIONS;
 			}
 			/* From what I read, Samsung TV's expect a [wrong] MIME type of x-mkv. */

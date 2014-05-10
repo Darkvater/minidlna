@@ -25,9 +25,18 @@
 #define __CAPTIONS_H__
 
 void
-check_for_captions(const char *path, int64_t detailID);
+check_for_captions(const char *path, int64_t sID);
 
 void
 add_caption_if_has_media(const char *path);
+
+int
+has_caption_with_id(int64_t ID);
+
+char*
+get_caption(int64_t ID);
+
+int
+delete_caption(const char *path);
 
 #endif /* __CAPTIONS_H__ */
