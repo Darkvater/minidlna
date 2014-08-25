@@ -4,8 +4,9 @@ Makefile.in
 Makefile
 aclocal.m4
 autom4te.cache/
+compile
 config.guess
-config.h.in
+config.h.in*
 config.rpath
 config.sub
 config.status
@@ -16,7 +17,9 @@ conftest.*
 configure
 depcomp
 install-sh
+linux/minidlna.init.d.script
 m4/
+minidlnad
 missing
 mkinstalldirs
 po/Makefile.in.in
@@ -33,5 +36,15 @@ po/POTFILES
 po/*.gmo
 po/stamp-po
 stamp-h1
+tagutils/.dirstamp
 .deps/
+.idea/
 *.o
+*.sln
+*.vcproj
+*.vcxproj
+*.sdf
+*.opensdf
+*.suo
+*.user
+*.filters
