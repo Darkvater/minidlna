@@ -31,6 +31,7 @@ typedef struct metadata_s {
 	char *       album;
 	char *       genre;
 	char *       comment;
+	char *       description;
 	unsigned int disc;
 	unsigned int track;
 	unsigned int channels;

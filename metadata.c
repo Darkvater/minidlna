@@ -56,6 +56,12 @@
 #define FLAG_MIME	0x00000100
 #define FLAG_DURATION	0x00000200
 #define FLAG_RESOLUTION	0x00000400
+#define FLAG_BITRATE	0x00000800
+#define FLAG_FREQUENCY	0x00001000
+#define FLAG_BPS	0x00002000
+#define FLAG_CHANNELS	0x00004000
+#define FLAG_ROTATION	0x00008000
+#define FLAG_DESCRIPTION 0x00010000
 
 /* Audio profile flags */
 enum audio_profiles {
@@ -116,6 +122,76 @@ dlna_timestamp_is_present(const char *filename, int *raw_packet_size)
 	return 0;
 }
 
+char *
+check_for_nfo_name(const char *path)
+{
+	struct linked_names_s *metadata_name;
+	char * nfo = malloc(MAXPATHLEN);
+	char * path_cpy = strdup(path);
+	char * dir = dirname(path_cpy);
+
+	for (metadata_name = metadata_names; metadata_name; metadata_name = metadata_name->next)
+	{
+		snprintf(nfo, MAXPATHLEN, "%s/%s", dir, metadata_name->name);
+		if (access(nfo, R_OK) == 0)
+		{
+			goto return_result;
+		}
+	}
+
+	strncpy(nfo, path, MAXPATHLEN);
+	strip_ext(nfo);
+	strncat(nfo, ".nfo", 4);
+	if (access(nfo, R_OK) != 0)
+	{
+		free(nfo);
+		nfo = NULL;
+	}
+
+return_result:
+	free(path_cpy);
+	return nfo;
+}
+
+char *
+unescape_escape_tag(const char *tag)
+{
+	char *esc_tag = unescape_tag(tag, 1);
+	char *dest = escape_tag(esc_tag, 1);
+	free(esc_tag);
+	return dest;
+}
+
+void
+set_value_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
+{
+	char *val = GetValueFromNameValueList(xml, name);
+	if (val)
+	{
+		free(*dest);
+		*dest = unescape_escape_tag(val);
+	}
+}
+
+void
+set_value_list_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
+{
+	char *result = calloc(MAXPATHLEN, MAXPATHLEN);
+	const struct NameValue *resume = NULL;
+	char *val;
+
+	while ((val = GetValueFromNameValueListWithResumeSupport(xml, name, &resume)))
+	{
+		if (*dest != NULL) free(*dest);
+		char *escaped_val = unescape_escape_tag(val);
+		x_strlcat(result, ",", MAXPATHLEN);
+		x_strlcat(result, escaped_val, MAXPATHLEN);
+		free(escaped_val);
+	}
+	*dest = strdup(&result[1]); /* get rid of starting comma */
+	free(result);
+}
+
 void
 parse_nfo(const char *path, metadata_t *m)
 {
@@ -156,37 +232,15 @@ parse_nfo(const char *path, metadata_t *m)
 		free(esc_tag);
 	}
 
-	val = GetValueFromNameValueList(&xml, "plot");
-	if( val ) {
-		char *esc_tag = unescape_tag(val, 1);
-		m->comment = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
+	set_value_from_xml(&m->date, &xml, "year");
+	set_value_from_xml(&m->date, &xml, "capturedate");
 
-	val = GetValueFromNameValueList(&xml, "capturedate");
-	if( val ) {
-		char *esc_tag = unescape_tag(val, 1);
-		m->date = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
-
-	val = GetValueFromNameValueList(&xml, "genre");
-	if( val )
-	{
-		free(m->genre);
-		char *esc_tag = unescape_tag(val, 1);
-		m->genre = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
-
-	val = GetValueFromNameValueList(&xml, "mime");
-	if( val )
-	{
-		free(m->mime);
-		char *esc_tag = unescape_tag(val, 1);
-		m->mime = escape_tag(esc_tag, 1);
-		free(esc_tag);
-	}
+	set_value_from_xml(&m->comment, &xml, "tagline");
+	set_value_from_xml(&m->description, &xml, "plot");
+	set_value_from_xml(&m->creator, &xml, "director");
+	set_value_from_xml(&m->mime, &xml, "mime");
+	set_value_list_from_xml(&m->genre, &xml, "genre");
+	set_value_list_from_xml(&m->artist, &xml, "name");
 
 	ClearNameValueList(&xml);
 	fclose(nfo);
@@ -209,6 +263,8 @@ free_metadata(metadata_t *m, uint32_t flags)
 		free(m->date);
 	if( flags & FLAG_COMMENT )
 		free(m->comment);
+	if( flags & FLAG_DESCRIPTION )
+		free(m->description);
 	if( flags & FLAG_DLNA_PN )
 		free(m->dlna_pn);
 	if( flags & FLAG_MIME )
@@ -411,12 +467,12 @@ GetAudioMetadata(const char *path, char *name)
 
 	ret = sql_exec(db, "INSERT into DETAILS"
 	                   " (PATH, SIZE, TIMESTAMP, DURATION, CHANNELS, BITRATE, SAMPLERATE, DATE,"
-	                   "  TITLE, CREATOR, ARTIST, ALBUM, GENRE, COMMENT, DISC, TRACK, DLNA_PN, MIME, ALBUM_ART) "
+	                   "  TITLE, CREATOR, ARTIST, ALBUM, GENRE, COMMENT, DESCRIPTION, DISC, TRACK, DLNA_PN, MIME, ALBUM_ART) "
 	                   "VALUES"
-	                   " (%Q, %lld, %lld, '%s', %d, %d, %d, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %d, %d, %Q, '%s', %lld);",
-	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, song.channels, song.bitrate,
-	                   song.samplerate, m.date, m.title, m.creator, m.artist, m.album, m.genre, m.comment, song.disc,
-	                   song.track, m.dlna_pn, song.mime?song.mime:m.mime, album_art);
+	                   " (%Q, %lld, %lld, '%s', %d, %d, %d, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %d, %d, %Q, '%s', %lld);",
+	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, song.channels, song.bitrate, song.samplerate, m.date,
+	                   m.title, m.creator, m.artist, m.album, m.genre, m.comment, m.description, song.disc, song.track,
+	                   m.dlna_pn, song.mime?song.mime:m.mime, album_art);
 	if( ret != SQLITE_OK )
 	{
 		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
@@ -623,7 +679,6 @@ GetVideoMetadata(const char *path, char *name)
 	enum audio_profiles audio_profile = PROFILE_AUDIO_UNKNOWN;
 	char fourcc[4];
 	int64_t album_art = 0;
-	char nfo[MAXPATHLEN], *ext;
 	struct song_metadata video;
 	metadata_t m;
 	uint32_t free_flags = 0xFFFFFFFF;
@@ -1450,15 +1505,13 @@ video_no_dlna:
 	}
 #endif
 
-	strcpy(nfo, path);
-	ext = strrchr(nfo, '.');
-	if( ext )
 	{
-		strcpy(ext+1, "nfo");
-		if( access(nfo, F_OK) == 0 )
+		char * nfo = check_for_nfo_name(path);
+		if (nfo)
 		{
 			parse_nfo(nfo, &m);
 		}
+		free(nfo);
 	}
 
 	if( !m.mime )
@@ -1498,12 +1551,12 @@ video_no_dlna:
 
 	ret = sql_exec(db, "INSERT into DETAILS"
 	                   " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
-	                   "  TITLE, CREATOR, ARTIST, GENRE, COMMENT, DLNA_PN, MIME, ALBUM_ART) "
+	                   "  TITLE, CREATOR, ARTIST, GENRE, COMMENT, DESCRIPTION, DLNA_PN, MIME, ALBUM_ART) "
 	                   "VALUES"
-	                   " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, '%q', %Q, %Q, %Q, %Q, %Q, '%q', %lld);",
+	                   " (%Q, %lld, %lld, %Q, %Q, %Q, %Q, %Q, %Q, '%q', %Q, %Q, %Q, %Q, %Q, %Q, '%q', %lld);",
 	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration,
 	                   m.date, m.channels, m.bitrate, m.frequency, m.resolution,
-			   m.title, m.creator, m.artist, m.genre, m.comment, m.dlna_pn,
+			   m.title, m.creator, m.artist, m.genre, m.comment, m.description, m.dlna_pn,
                            m.mime, album_art);
 	if( ret != SQLITE_OK )
 	{
