@@ -474,6 +474,30 @@ static void init_nls(void)
 #endif
 }
 
+static void read_file(img_t* img, const char* dir, const char *filename) {
+	char path[1024];
+	sprintf( path, "%s/%s", dir, filename);
+	FILE *file = fopen(path, "rb");
+	if(!file) {
+		char err[1024];
+		sprintf(err, "Failed to open path %s", path);
+
+		perror(err);
+		exit(EXIT_FAILURE);
+	}
+	fseek( file , 0L , SEEK_END);
+	img->size = ftell( file );
+	rewind( file );
+
+	img->data = calloc(img->size + 1, sizeof(char));
+	if(!img->data) {
+		perror("read_file(): failed to allocate memory");
+		exit(EXIT_FAILURE);
+	}
+	fread(img->data, sizeof(char), img->size, file);
+	fclose(file);
+}
+
 /* init phase :
  * 1) read configuration file
  * 2) read command line arguments
@@ -948,6 +972,16 @@ init(int argc, char **argv)
 	else
 		strcpy(presentationurl, "/");
 
+	/* Read icons */
+	memset(&png_sm, '\0', sizeof(img_t));
+	memset(&png_lrg, '\0', sizeof(img_t));
+	memset(&jpeg_sm, '\0', sizeof(img_t));
+	memset(&jpeg_lrg, '\0', sizeof(img_t));
+	read_file(&png_sm, DATA_PATH, "icons/png_sm.png");
+	read_file(&png_lrg, DATA_PATH, "icons/png_lrg.png");
+	read_file(&jpeg_sm, DATA_PATH, "icons/jpeg_sm.jpeg");
+	read_file(&jpeg_lrg, DATA_PATH, "icons/jpeg_lrg.jpeg");
+
 	/* set signal handlers */
 	memset(&sa, 0, sizeof(struct sigaction));
 	sa.sa_handler = sigterm;
@@ -1330,6 +1364,11 @@ shutdown:
 
 	if (pidfilename && unlink(pidfilename) < 0)
 		DPRINTF(E_ERROR, L_GENERAL, "Failed to remove pidfile %s: %s\n", pidfilename, strerror(errno));
+
+	free(png_sm.data);
+	free(png_lrg.data);
+	free(jpeg_sm.data);
+	free(jpeg_lrg.data);
 
 	log_close();
 	freeoptions();

@@ -216,6 +216,13 @@ extern char presentationurl[];
 extern char pnpx_hwid[];
 #endif
 
+typedef struct img_t {
+	uint8_t* data;
+	long size;
+} img_t;
+
+extern img_t png_sm, png_lrg, jpeg_sm, jpeg_lrg;
+
 /* lan addresses */
 extern int n_lan_addr;
 extern struct lan_addr_s lan_addr[];

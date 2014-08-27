@@ -15,9 +15,9 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA.
 
-AM_CFLAGS = -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 @STATIC_CFLAGS@
+AM_CFLAGS = -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DDATA_PATH=\"$(pkgdatadir)\" @STATIC_CFLAGS@
 
-SUBDIRS=po
+SUBDIRS=po icons
 
 sbin_PROGRAMS = minidlnad
 check_PROGRAMS = testupnpdescgen
