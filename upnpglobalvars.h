@@ -232,6 +232,7 @@ extern char log_path[];
 extern struct media_dir_s *media_dirs;
 extern struct linked_names_s *album_art_names;
 extern struct linked_names_s *metadata_names;
+extern struct linked_names_s *ignore_paths;
 extern short int scanning;
 extern volatile short int quitting;
 extern volatile uint32_t updateID;

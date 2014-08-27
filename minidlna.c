@@ -650,6 +650,9 @@ init(int argc, char **argv)
 		case UPNPMETADATA_NAMES:
 			metadata_names = parse_delimited_list_of_options(ary_options[i].value, "/");
 			break;
+		case SCANNER_IGNORE:
+			ignore_paths = parse_delimited_list_of_options(ary_options[i].value, "/");
+			break;
 		case UPNPDBDIR:
 			path = realpath(ary_options[i].value, buf);
 			if (!path)
