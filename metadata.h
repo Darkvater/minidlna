@@ -82,12 +82,6 @@ typedef enum {
 	VALID
 } ts_timestamp_t;
 
-int
-ends_with(const char *haystack, const char *needle);
-
-void
-check_for_captions(const char *path, int64_t detailID);
-
 int64_t
 GetFolderMetadata(const char *name, const char *path, const char *artist, const char *genre, int64_t album_art);
 

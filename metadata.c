@@ -39,6 +39,7 @@
 #include "upnpreplyparse.h"
 #include "tivo_utils.h"
 #include "metadata.h"
+#include "captions.h"
 #include "albumart.h"
 #include "utils.h"
 #include "sql.h"
@@ -113,47 +114,6 @@ dlna_timestamp_is_present(const char *filename, int *raw_packet_size)
 	}
 	*raw_packet_size = 0;
 	return 0;
-}
-
-void
-check_for_captions(const char *path, int64_t detailID)
-{
-	char file[MAXPATHLEN];
-	char *p;
-	int ret;
-
-	strncpyt(file, path, sizeof(file));
-	p = strip_ext(file);
-	if (!p)
-		p = strrchr(file, '\0');
-
-	/* If we weren't given a detail ID, look for one. */
-	if (!detailID)
-	{
-		detailID = sql_get_int64_field(db, "SELECT ID from DETAILS where (PATH > '%q.' and PATH <= '%q.z')"
-		                            " and MIME glob 'video/*' limit 1", file, file);
-		if (detailID <= 0)
-		{
-			//DPRINTF(E_MAXDEBUG, L_METADATA, "No file found for caption %s.\n", path);
-			return;
-		}
-	}
-
-	strcpy(p, ".srt");
-	ret = access(file, R_OK);
-	if (ret != 0)
-	{
-		strcpy(p, ".smi");
-		ret = access(file, R_OK);
-	}
-
-	if (ret == 0)
-	{
-		sql_exec(db, "INSERT into CAPTIONS"
-		             " (ID, PATH) "
-		             "VALUES"
-		             " (%lld, %Q)", detailID, file);
-	}
 }
 
 void
