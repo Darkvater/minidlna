@@ -78,6 +78,7 @@
 
 #include "upnpglobalvars.h"
 #include "sql.h"
+#include "naturalsort.h"
 #include "upnphttp.h"
 #include "upnpdescgen.h"
 #include "minidlnapath.h"
@@ -299,6 +300,7 @@ open_db(sqlite3 **sq3)
 	sql_exec(db, "pragma journal_mode = OFF");
 	sql_exec(db, "pragma synchronous = OFF;");
 	sql_exec(db, "pragma default_cache_size = 8192;");
+	sqlite3_create_collation(db, "naturalsort", SQLITE_UTF8, NULL, naturalsort);
 
 	return new_db;
 }
