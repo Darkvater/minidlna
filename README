@@ -34,3 +34,8 @@ Prerequisites
 
 
 Justin Maggard
+
+Features
+==================
+
+- support dynamic icons by loading from pkgdatadir/icons
