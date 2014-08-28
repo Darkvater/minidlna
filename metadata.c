@@ -217,7 +217,7 @@ set_value_from_xml(char **dest, struct NameValueParserData *xml, const char *nam
 void
 set_value_list_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
 {
-	char *result = calloc(MAXPATHLEN, MAXPATHLEN);
+	char *result = calloc(MAXPATHLEN, 1);
 	const struct NameValue *resume = NULL;
 	char *val;
 
