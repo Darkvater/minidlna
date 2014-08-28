@@ -55,12 +55,13 @@
 #define FLAG_MIME	0x00000100
 #define FLAG_DURATION	0x00000200
 #define FLAG_RESOLUTION	0x00000400
-#define FLAG_BITRATE	0x00000800
-#define FLAG_FREQUENCY	0x00001000
-#define FLAG_BPS	0x00002000
-#define FLAG_CHANNELS	0x00004000
-#define FLAG_ROTATION	0x00008000
 #define FLAG_DESCRIPTION 0x00010000
+#define FLAG_RATING 0x00020000
+#define FLAG_AUTHOR	0x00040000
+#define FLAG_TRACK 0x00020000
+#define FLAG_DISC 0x0040000
+
+#define ALL_FLAGS 0xFFFFFFFF
 
 /* Audio profile flags */
 enum audio_profiles {
@@ -280,6 +281,8 @@ parse_nfo(const char *path, metadata_t *m)
 	set_value_from_xml(&m->creator, &xml, "director");
 	set_value_from_xml(&m->mime, &xml, "mime");
 	set_value_list_from_xml(&m->genre, &xml, "genre");
+	set_value_list_from_xml(&m->author, &xml, "credits");
+	set_value_list_from_xml(&m->rating, &xml, "mpaa");
 	set_value_list_from_xml(&m->artist, &xml, "name");
 
 	ClearNameValueList(&xml);
@@ -299,12 +302,16 @@ free_metadata(metadata_t *m, uint32_t flags)
 		free(m->genre);
 	if( flags & FLAG_CREATOR )
 		free(m->creator);
+	if (flags & FLAG_AUTHOR)
+		free(m->author);
 	if( flags & FLAG_DATE )
 		free(m->date);
 	if( flags & FLAG_COMMENT )
 		free(m->comment);
 	if( flags & FLAG_DESCRIPTION )
 		free(m->description);
+	if( flags & FLAG_RATING )
+		free(m->rating);
 	if( flags & FLAG_DLNA_PN )
 		free(m->dlna_pn);
 	if( flags & FLAG_MIME )
@@ -554,7 +561,7 @@ GetImageMetadata(const char *path, char *name)
 	int64_t ret;
 	image_s *imsrc;
 	metadata_t m;
-	uint32_t free_flags = 0xFFFFFFFF;
+	uint32_t free_flags = ALL_FLAGS;
 	memset(&m, '\0', sizeof(metadata_t));
 
 	//DEBUG DPRINTF(E_DEBUG, L_METADATA, "Parsing %s...\n", path);
@@ -721,7 +728,7 @@ GetVideoMetadata(const char *path, char *name)
 	int64_t album_art = 0;
 	struct song_metadata video;
 	metadata_t m;
-	uint32_t free_flags = 0xFFFFFFFF;
+	uint32_t free_flags = ALL_FLAGS;
 	char *path_cpy, *basepath;
 
 	memset(&m, '\0', sizeof(m));
@@ -1591,13 +1598,13 @@ video_no_dlna:
 
 	ret = sql_exec(db, "INSERT into DETAILS"
 	                   " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
-	                   "  TITLE, CREATOR, ARTIST, GENRE, COMMENT, DESCRIPTION, DLNA_PN, MIME, ALBUM_ART) "
+	                   "  TITLE, CREATOR, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
+	                   "  DLNA_PN, MIME, ALBUM_ART) "
 	                   "VALUES"
-	                   " (%Q, %lld, %lld, %Q, %Q, %Q, %Q, %Q, %Q, '%q', %Q, %Q, %Q, %Q, %Q, %Q, '%q', %lld);",
-	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration,
-	                   m.date, m.channels, m.bitrate, m.frequency, m.resolution,
-			   m.title, m.creator, m.artist, m.genre, m.comment, m.description, m.dlna_pn,
-                           m.mime, album_art);
+	                   " (%Q, %lld, %lld, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %lld);",
+	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, m.date, m.channels, m.bitrate, m.frequency, m.resolution,
+	                   m.title, m.creator, m.author, m.artist, m.genre, m.comment, m.description, m.rating,
+	                   m.dlna_pn, m.mime, album_art);
 	if( ret != SQLITE_OK )
 	{
 		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);

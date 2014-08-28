@@ -338,12 +338,13 @@ GetCurrentConnectionInfo(struct upnphttp * h, const char * action)
 #define FILTER_UPNP_ALBUM                        0x00008000
 #define FILTER_UPNP_ALBUMARTURI                  0x00010000
 #define FILTER_UPNP_ALBUMARTURI_DLNA_PROFILEID   0x00020000
-#define FILTER_UPNP_ARTIST                       0x00040000
+#define FILTER_UPNP_RATING                       0x00040000
 #define FILTER_UPNP_GENRE                        0x00080000
 #define FILTER_UPNP_ORIGINALTRACKNUMBER          0x00100000
 #define FILTER_UPNP_SEARCHCLASS                  0x00200000
 #define FILTER_UPNP_STORAGEUSED                  0x00400000
-#define FILTER_DC_LONG_DESCRIPTION               0x00800000              
+#define FILTER_DC_LONG_DESCRIPTION               0x00800000
+#define FILTER_UPNP_AUTHOR                       0x20000000
 /* Vendor-specific filter flags */
 #define FILTER_SEC_CAPTION_INFO_EX               0x01000000
 #define FILTER_SEC_DCM_INFO                      0x02000000
@@ -389,9 +390,21 @@ set_filter_flags(char *filter, struct upnphttp *h)
 		{
 			flags |= FILTER_DC_CREATOR;
 		}
+		else if (strcmp(item, "upnp:director") == 0)
+		{
+			flags |= FILTER_DC_CREATOR;
+		}
+		else if (strcmp(item, "upnp:author") == 0)
+		{
+			flags |= FILTER_UPNP_AUTHOR;
+		}
 		else if( strcmp(item, "dc:date") == 0 )
 		{
 			flags |= FILTER_DC_DATE;
+		}
+		else if (strcmp(item, "upnp:rating") == 0)
+		{
+			flags |= FILTER_UPNP_RATING;
 		}
 		else if( strcmp(item, "dc:description") == 0 )
 		{
@@ -426,7 +439,7 @@ set_filter_flags(char *filter, struct upnphttp *h)
 		}
 		else if( strcmp(item, "upnp:artist") == 0 )
 		{
-			flags |= FILTER_UPNP_ARTIST;
+			flags |= FILTER_UPNP_ACTOR;
 		}
 		else if( strcmp(item, "upnp:actor") == 0 )
 		{
@@ -720,7 +733,7 @@ object_exists(const char *object)
 #define COLUMNS "o.DETAIL_ID, o.CLASS," \
                 " d.SIZE, d.TITLE, d.DURATION, d.BITRATE, d.SAMPLERATE, d.ARTIST," \
                 " d.ALBUM, d.GENRE, d.COMMENT, d.DESCRIPTION, d.CHANNELS, d.TRACK, d.DATE, d.RESOLUTION," \
-                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.DISC "
+                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.DISC, d.RATING, d.AUTHOR "
 #define SELECT_COLUMNS "SELECT o.OBJECT_ID, o.PARENT_ID, o.REF_ID, " COLUMNS
 
 static int
@@ -752,8 +765,9 @@ callback(void *args, int argc, char **argv, char **azColName)
 	struct Response *passed_args = (struct Response *)args;
 	char *id = argv[0], *parent = argv[1], *refID = argv[2], *detailID = argv[3], *class = argv[4], *size = argv[5], *title = argv[6],
 	     *duration = argv[7], *bitrate = argv[8], *sampleFrequency = argv[9], *artists = argv[10], *album = argv[11],
-		 *genres = argv[12], *comment = argv[13], *description = argv[14], * nrAudioChannels = argv[15], *track = argv[16], *date = argv[17],
-		 *resolution = argv[18], *tn = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22], *album_art = argv[23];
+	     *genres = argv[12], *comment = argv[13], *description = argv[14], * nrAudioChannels = argv[15], *track = argv[16], *date = argv[17],
+	     *resolution = argv[18], *tn = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22],
+	     *album_art = argv[23], *rating = argv[25], *author = argv[26];
 	char dlna_buf[128];
 	const char *ext;
 	struct string_s *str = passed_args->str;
@@ -911,20 +925,22 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( creator && (passed_args->filter & FILTER_DC_CREATOR) ) {
 			ret = append(str, creator, *mime == 'v' ? "upnp:director" : "dc:creator");
 		}
+		if (author && (passed_args->filter & FILTER_UPNP_AUTHOR)) {
+			ret = append_multiple_from_commaseparated_string(str, author, "upnp:author");
+		}
 		if( date && (passed_args->filter & FILTER_DC_DATE) ) {
 			ret = strcatf(str, "&lt;dc:date&gt;%s&lt;/dc:date&gt;", date);
+		}
+		if (rating && (passed_args->filter & FILTER_UPNP_RATING)) {
+			ret = append(str, rating, "upnp:rating");
 		}
 		if( passed_args->filter & FILTER_SEC_DCM_INFO ) {
 			/* Get bookmark */
 			ret = strcatf(str, "&lt;sec:dcmInfo&gt;CREATIONDATE=0,FOLDER=%s,BM=%d&lt;/sec:dcmInfo&gt;",
 			              title, sql_get_int_field(db, "SELECT SEC from BOOKMARKS where ID = '%s'", detailID));
 		}
-		if( artists ) {
-			if( (*mime == 'v') && (passed_args->filter & FILTER_UPNP_ACTOR) ) {
-					ret = append_multiple_from_commaseparated_string(str, artists, "upnp:actor");
-			} else if( passed_args->filter & FILTER_UPNP_ARTIST ) {
-				ret = append_multiple_from_commaseparated_string(str, artists, "upnp:artist");
-			}
+		if (artists && (passed_args->filter & FILTER_UPNP_ACTOR)) {
+			ret = append_multiple_from_commaseparated_string(str, artists, *mime == 'v' ? "upnp:actor" : "upnp:artist");
 		}
 		if( album && (passed_args->filter & FILTER_UPNP_ALBUM) ) {
 			ret = strcatf(str, "&lt;upnp:album&gt;%s&lt;/upnp:album&gt;", album);
@@ -1119,7 +1135,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( genres && (passed_args->filter & FILTER_UPNP_GENRE) ) {
 			ret = append_multiple_from_commaseparated_string(str, genres, "upnp:genre");
 		}
-		if( artists && (passed_args->filter & FILTER_UPNP_ARTIST) ) {
+		if( artists && (passed_args->filter & FILTER_UPNP_ACTOR) ) {
 			ret = append_multiple_from_commaseparated_string(str, artists, "upnp:artist");
 		}
 		if( album_art && atoi(album_art) && (passed_args->filter & FILTER_UPNP_ALBUMARTURI) ) {
