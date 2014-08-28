@@ -34,3 +34,10 @@ Prerequisites
 
 
 Justin Maggard
+
+Features
+==================
+
+- support scanning multiple captions for a media (use language suffix .ENG, .HUN, etc.)
+  note: until there is a UI to support selection, only default caption will be returned which
+  is either the one without language, or the first one if there is no language
