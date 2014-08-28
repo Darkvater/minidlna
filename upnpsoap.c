@@ -426,6 +426,10 @@ set_filter_flags(char *filter, struct upnphttp *h)
 		{
 			flags |= FILTER_UPNP_ALBUM;
 		}
+		else if (strcmp(item, "upnp:seriesTitle") == 0)
+		{
+			flags |= FILTER_UPNP_ALBUM;
+		}
 		else if( strcmp(item, "upnp:albumArtURI") == 0 )
 		{
 			flags |= FILTER_UPNP_ALBUMARTURI;
@@ -450,6 +454,10 @@ set_filter_flags(char *filter, struct upnphttp *h)
 			flags |= FILTER_UPNP_GENRE;
 		}
 		else if( strcmp(item, "upnp:originalTrackNumber") == 0 )
+		{
+			flags |= FILTER_UPNP_ORIGINALTRACKNUMBER;
+		}
+		else if (strcmp(item, "upnp:episodeNumber") == 0)
 		{
 			flags |= FILTER_UPNP_ORIGINALTRACKNUMBER;
 		}
@@ -767,7 +775,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 	     *duration = argv[7], *bitrate = argv[8], *sampleFrequency = argv[9], *artists = argv[10], *album = argv[11],
 	     *genres = argv[12], *comment = argv[13], *description = argv[14], * nrAudioChannels = argv[15], *track = argv[16], *date = argv[17],
 	     *resolution = argv[18], *tn = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22],
-	     *album_art = argv[23], *rating = argv[25], *author = argv[26];
+	     *album_art = argv[23]/*, *disc = argv[24]*/, *rating = argv[25], *author = argv[26];
 	char dlna_buf[128];
 	const char *ext;
 	struct string_s *str = passed_args->str;
@@ -943,7 +951,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 			ret = append_multiple_from_commaseparated_string(str, artists, *mime == 'v' ? "upnp:actor" : "upnp:artist");
 		}
 		if( album && (passed_args->filter & FILTER_UPNP_ALBUM) ) {
-			ret = strcatf(str, "&lt;upnp:album&gt;%s&lt;/upnp:album&gt;", album);
+			ret = append(str, album, *mime == 'v' ? "upnp:seriesTitle" : "upnp:album");
 		}
 		if( genres && (passed_args->filter & FILTER_UPNP_GENRE) ) {
 			ret = append_multiple_from_commaseparated_string(str, genres, "upnp:genre");
@@ -952,7 +960,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 			track = strrchr(id, '$')+1;
 		}
 		if( track && atoi(track) && (passed_args->filter & FILTER_UPNP_ORIGINALTRACKNUMBER) ) {
-			ret = strcatf(str, "&lt;upnp:originalTrackNumber&gt;%s&lt;/upnp:originalTrackNumber&gt;", track);
+			ret = append(str, track, *mime == 'v' ? "upnp:episodeNumber" : "upnp:originalTrackNumber");
 		}
 		if( passed_args->filter & FILTER_RES ) {
 			ext = mime_to_ext(mime);

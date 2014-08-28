@@ -469,7 +469,7 @@ insert_file(char *name, const char *path, const char *parentID, int object, medi
  		orig_name = strdup(name);
 		strcpy(base, VIDEO_DIR_ID);
 		strcpy(class, "item.videoItem");
-		detailID = GetVideoMetadata(path, name);
+		detailID = GetVideoMetadata(path, name, parentID);
 		if( !detailID )
 			strcpy(name, orig_name);
 	}

@@ -53,7 +53,6 @@ static const struct {
 	{ UPNPFRIENDLYNAME, "friendly_name"},
 	{ UPNPMEDIADIR, "media_dir"},
 	{ UPNPALBUMART_NAMES, "album_art_names"},
-	{ UPNPMETADATA_NAMES, "metadata_names"},
 	{ SCANNER_IGNORE, "ignore_paths"},
 	{ UPNPINOTIFY, "inotify" },
 	{ UPNPDBDIR, "db_dir" },
@@ -207,9 +206,7 @@ freeoptions(void)
 	}
 
 	free_linked_names_s(album_art_names);
-	free_linked_names_s(metadata_names);
 	free_linked_names_s(ignore_paths);
-
 
 	if(ary_options)
 	{

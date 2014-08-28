@@ -164,38 +164,7 @@ check_for_captions(const char *path, int64_t detailID)
 }
 
 char *
-check_for_nfo_name(const char *path)
-{
-	struct linked_names_s *metadata_name;
-	char * nfo = malloc(MAXPATHLEN);
-	char * path_cpy = strdup(path);
-	char * dir = dirname(path_cpy);
-
-	for (metadata_name = metadata_names; metadata_name; metadata_name = metadata_name->next)
-	{
-		snprintf(nfo, MAXPATHLEN, "%s/%s", dir, metadata_name->name);
-		if (access(nfo, R_OK) == 0)
-		{
-			goto return_result;
-		}
-	}
-
-	strncpy(nfo, path, MAXPATHLEN);
-	strip_ext(nfo);
-	strncat(nfo, ".nfo", 4);
-	if (access(nfo, R_OK) != 0)
-	{
-		free(nfo);
-		nfo = NULL;
-	}
-
-return_result:
-	free(path_cpy);
-	return nfo;
-}
-
-char *
-unescape_escape_tag(const char *tag)
+escape_unescaped_tag(const char *tag)
 {
 	char *esc_tag = unescape_tag(tag, 1);
 	char *dest = escape_tag(esc_tag, 1);
@@ -204,18 +173,28 @@ unescape_escape_tag(const char *tag)
 }
 
 void
-set_value_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
+assign_value_if_exists(char **dest, const char *val)
+{
+	if (val)
+	{
+		free(*dest);
+		*dest = strdup(val);
+	}
+}
+
+void
+set_value_from_xml_if_exists(char **dest, struct NameValueParserData *xml, const char *name)
 {
 	char *val = GetValueFromNameValueList(xml, name);
 	if (val)
 	{
 		free(*dest);
-		*dest = unescape_escape_tag(val);
+		*dest = escape_unescaped_tag(val);
 	}
 }
 
 void
-set_value_list_from_xml(char **dest, struct NameValueParserData *xml, const char *name)
+set_value_list_from_xml_if_exists(char **dest, struct NameValueParserData *xml, const char *name)
 {
 	char *result = calloc(MAXPATHLEN, 1);
 	const struct NameValue *resume = NULL;
@@ -223,70 +202,208 @@ set_value_list_from_xml(char **dest, struct NameValueParserData *xml, const char
 
 	while ((val = GetValueFromNameValueListWithResumeSupport(xml, name, &resume)))
 	{
-		if (*dest != NULL) free(*dest);
-		char *escaped_val = unescape_escape_tag(val);
+		char *escaped_val = escape_unescaped_tag(val);
 		x_strlcat(result, ",", MAXPATHLEN);
 		x_strlcat(result, escaped_val, MAXPATHLEN);
 		free(escaped_val);
 	}
-	*dest = strdup(&result[1]); /* get rid of starting comma */
+
+	if (*result)
+	{
+		free(*dest);
+		*dest = strdup(&result[1]); /* get rid of starting comma */
+	}
 	free(result);
 }
 
-void
-parse_nfo(const char *path, metadata_t *m)
+static int
+read_nfo_data_from_xml(const char *path, struct NameValueParserData *xml)
 {
-	FILE *nfo;
 	char buf[65536];
-	struct NameValueParserData xml;
+	size_t max_buf_size = sizeof(buf);
 	struct stat file;
-	size_t nread;
-	char *val, *val2;
 
-	if( stat(path, &file) != 0 ||
-	    file.st_size > 65536 )
+	if (stat(path, &file) != 0 || file.st_size > max_buf_size)
 	{
 		DPRINTF(E_INFO, L_METADATA, "Not parsing very large .nfo file %s\n", path);
-		return;
+		return 1;
 	}
+
 	DPRINTF(E_DEBUG, L_METADATA, "Parsing .nfo file: %s\n", path);
-	nfo = fopen(path, "r");
-	if( !nfo )
-		return;
-	nread = fread(&buf, 1, sizeof(buf), nfo);
-	
-	ParseNameValue(buf, nread, &xml, 0);
-
-	//printf("\ttype: %s\n", GetValueFromNameValueList(&xml, "rootElement"));
-	val = GetValueFromNameValueList(&xml, "title");
-	if( val )
 	{
-		char *esc_tag = unescape_tag(val, 1);
-		val2 = GetValueFromNameValueList(&xml, "episodetitle");
-		if( val2 ) {
-			char *esc_tag2 = unescape_tag(val2, 1);
-			xasprintf(&m->title, "%s - %s", esc_tag, esc_tag2);
-			free(esc_tag2);
-		} else {
-			m->title = escape_tag(esc_tag, 1);
-		}
-		free(esc_tag);
+		size_t nread;
+		FILE *nfo = fopen(path, "r");
+
+		if (!nfo) return 1;
+
+		nread = fread(buf, 1, max_buf_size, nfo);
+		ParseNameValue(buf, nread, xml, 0);
+		fclose(nfo);
+	}
+	return 0;
+}
+
+static void
+parse_movie_nfo(struct NameValueParserData *xml, metadata_t *m)
+{
+	if (strcmp("movie", GetValueFromNameValueList(xml, "rootElement")) != 0) return;
+
+	set_value_from_xml_if_exists(&m->title, xml, "title");
+	set_value_from_xml_if_exists(&m->date, xml, "year");
+	set_value_from_xml_if_exists(&m->comment, xml, "tagline");
+	set_value_from_xml_if_exists(&m->description, xml, "plot");
+	set_value_from_xml_if_exists(&m->creator, xml, "director");
+	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
+	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
+	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
+	set_value_list_from_xml_if_exists(&m->artist, xml, "name");
+}
+
+static void
+parse_tvshow_nfo(struct NameValueParserData *xml, metadata_t *m)
+{
+	if (strcmp("tvshow", GetValueFromNameValueList(xml, "rootElement")) != 0) return;
+
+	set_value_from_xml_if_exists(&m->album, xml, "title");
+	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
+	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
+	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
+	set_value_list_from_xml_if_exists(&m->artist, xml, "name");
+
+	set_value_from_xml_if_exists(&m->date, xml, "capturedate"); // TiVO-specific
+}
+
+static void
+parse_tvepisode_nfo(struct NameValueParserData *xml, metadata_t *m)
+{
+	if (strcmp("episodedetails", GetValueFromNameValueList(xml, "rootElement")) != 0) return;
+
+	const char *season = GetValueFromNameValueList(xml, "season");
+	const char *episode = GetValueFromNameValueList(xml, "episode");
+	const char *episode_title = GetValueFromNameValueList(xml, "episodetitle"); // TiVO-specific
+
+	m->disc = season ? atoi(season) : 0;
+	m->track = episode ? atoi(episode) : 0;
+	set_value_from_xml_if_exists(&m->title, xml, "title");
+	if (m->disc && m->track)
+	{
+		char *title = m->title;
+		xasprintf(&m->title, "S%02dE%02d - %s", m->disc, m->track, title);
+		free(title);
+	}
+	else if (episode_title)
+	{
+		char *title = m->title;
+		xasprintf(&m->title, "%s - %s", title, episode_title);
+		free(title);
 	}
 
-	set_value_from_xml(&m->date, &xml, "year");
-	set_value_from_xml(&m->date, &xml, "capturedate");
+	set_value_from_xml_if_exists(&m->description, xml, "plot");
+	set_value_from_xml_if_exists(&m->creator, xml, "director");
+	set_value_from_xml_if_exists(&m->date, xml, "aired");
+}
 
-	set_value_from_xml(&m->comment, &xml, "tagline");
-	set_value_from_xml(&m->description, &xml, "plot");
-	set_value_from_xml(&m->creator, &xml, "director");
-	set_value_from_xml(&m->mime, &xml, "mime");
-	set_value_list_from_xml(&m->genre, &xml, "genre");
-	set_value_list_from_xml(&m->author, &xml, "credits");
-	set_value_list_from_xml(&m->rating, &xml, "mpaa");
-	set_value_list_from_xml(&m->artist, &xml, "name");
+static void
+parse_nfo(const char *path, metadata_t *m)
+{
+	char *root_element;
+	struct NameValueParserData xml;
+	if (read_nfo_data_from_xml(path, &xml) != 0) return;
+
+	root_element = GetValueFromNameValueList(&xml, "rootElement");
+	if (root_element == NULL) return;
+
+	DPRINTF(E_MAXDEBUG, L_METADATA, ".nfo type: %s\n", root_element);
+	parse_movie_nfo(&xml, m);
+	parse_tvshow_nfo(&xml, m);
+	parse_tvepisode_nfo(&xml, m);
+
+	set_value_from_xml_if_exists(&m->date, &xml, "mime");
 
 	ClearNameValueList(&xml);
-	fclose(nfo);
+}
+
+void
+check_for_nfo_name(const char *path, const char *name, metadata_t *m)
+{
+	char *nfo = malloc(MAXPATHLEN);
+	char *path_cpy = strdup(path);
+	char *dir = dirname(path_cpy);
+
+	snprintf(nfo, MAXPATHLEN, "%s/movie.nfo", dir);
+	if (access(nfo, R_OK) != 0) snprintf(nfo, MAXPATHLEN, "%s/%s.nfo", dir, name);
+	if (access(nfo, R_OK) == 0) parse_nfo(nfo, m);
+
+	free(path_cpy);
+	free(nfo);
+}
+
+void
+check_for_folder_nfo_name(const char *path, const char *name, metadata_t *m)
+{
+	char *nfo = malloc(MAXPATHLEN);
+
+	snprintf(nfo, MAXPATHLEN, "%s/tvshow.nfo", path);
+	if (access(nfo, R_OK) == 0) parse_nfo(nfo, m);
+
+	free(nfo);
+}
+
+void
+add_nfo_from_parent(const char *parentID, metadata_t *m)
+{
+	char *my_parentID = strdup(parentID);
+	char buf[256];
+	char * p;
+	while ((p = strrchr(my_parentID, '$')) != NULL)
+	{
+		int nrows;
+		char **result;
+		*p = '\0';
+		snprintf(buf, sizeof(buf), "SELECT D.ALBUM, D.ARTIST, D.AUTHOR, D.GENRE, D.RATING FROM DETAILS D, OBJECTS O "
+		                           "WHERE O.OBJECT_ID = '%s%s' AND O.DETAIL_ID = D.ID AND D.ALBUM NOT NULL LIMIT 1",
+		                           "64", my_parentID);
+
+		if (sql_get_table(db, buf, &result, &nrows, NULL) == SQLITE_OK)
+		{
+			if (nrows == 1)
+			{
+				assign_value_if_exists(&m->album, result[5]);
+				assign_value_if_exists(&m->artist, result[6]);
+				assign_value_if_exists(&m->author, result[7]);
+				assign_value_if_exists(&m->genre, result[8]);
+				assign_value_if_exists(&m->rating, result[9]);
+			}
+			sqlite3_free_table(result);
+			if (nrows == 1) break;
+		}
+	}
+	free(my_parentID);
+}
+
+int
+add_entry_to_details(const char *path, size_t entry_size, time_t entry_timestamp, metadata_t *m, int64_t album_art_id)
+{
+	int ret = sql_exec(db, "INSERT into DETAILS"
+	                       " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
+	                       "  TITLE, CREATOR, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
+	                       "  ALBUM, TRACK, DISC, DLNA_PN, MIME, ALBUM_ART) "
+	                       "VALUES"
+	                       " (%Q, %lld, %ld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld);",
+	                       path, entry_size, entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->resolution,
+	                       m->title, m->creator, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
+	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, album_art_id);
+
+	if (ret != SQLITE_OK)
+	{
+		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
+		ret = 0;
+	}
+	else
+	{
+		ret = sqlite3_last_insert_rowid(db);
+	}
+	return ret;
 }
 
 void
@@ -323,21 +440,18 @@ free_metadata(metadata_t *m, uint32_t flags)
 }
 
 int64_t
-GetFolderMetadata(const char *name, const char *path, const char *artist, const char *genre, int64_t album_art)
+GetFolderMetadata(const char *name, const char *path, const char *artist, const char *genre, int64_t album_art_id)
 {
-	int ret;
+	metadata_t m;
+	memset(&m, 0, sizeof(m));
+	assign_value_if_exists(&m.title, name);
+	assign_value_if_exists(&m.creator, artist);
+	assign_value_if_exists(&m.artist, artist);
+	assign_value_if_exists(&m.genre, genre);
 
-	ret = sql_exec(db, "INSERT into DETAILS"
-	                   " (TITLE, PATH, CREATOR, ARTIST, GENRE, ALBUM_ART) "
-	                   "VALUES"
-	                   " ('%q', %Q, %Q, %Q, %Q, %lld);",
-	                   name, path, artist, artist, genre, album_art);
-	if( ret != SQLITE_OK )
-		ret = 0;
-	else
-		ret = sqlite3_last_insert_rowid(db);
+	if (path != NULL) check_for_folder_nfo_name(path, name, &m);
 
-	return ret;
+	return add_entry_to_details(path, 0, 0, &m, album_art_id);
 }
 
 int64_t
@@ -715,7 +829,7 @@ no_exifdata:
 }
 
 int64_t
-GetVideoMetadata(const char *path, char *name)
+GetVideoMetadata(const char *path, char *name, const char *parentID)
 {
 	struct stat file;
 	int ret, i;
@@ -1552,14 +1666,8 @@ video_no_dlna:
 	}
 #endif
 
-	{
-		char * nfo = check_for_nfo_name(path);
-		if (nfo)
-		{
-			parse_nfo(nfo, &m);
-		}
-		free(nfo);
-	}
+	add_nfo_from_parent(parentID, &m);
+	check_for_nfo_name(path, name, &m);
 
 	if( !m.mime )
 	{
@@ -1596,25 +1704,9 @@ video_no_dlna:
 	freetags(&video);
 	lav_close(ctx);
 
-	ret = sql_exec(db, "INSERT into DETAILS"
-	                   " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
-	                   "  TITLE, CREATOR, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
-	                   "  DLNA_PN, MIME, ALBUM_ART) "
-	                   "VALUES"
-	                   " (%Q, %lld, %lld, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %lld);",
-	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, m.date, m.channels, m.bitrate, m.frequency, m.resolution,
-	                   m.title, m.creator, m.author, m.artist, m.genre, m.comment, m.description, m.rating,
-	                   m.dlna_pn, m.mime, album_art);
-	if( ret != SQLITE_OK )
-	{
-		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
-		ret = 0;
-	}
-	else
-	{
-		ret = sqlite3_last_insert_rowid(db);
-		check_for_captions(path, ret);
-	}
+	ret = add_entry_to_details(path, file.st_size, file.st_mtime, &m, album_art);
+	if (ret != 0) check_for_captions(path, ret);
+
 	free_metadata(&m, free_flags);
 	free(path_cpy);
 

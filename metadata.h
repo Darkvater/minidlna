@@ -101,6 +101,6 @@ int64_t
 GetImageMetadata(const char *path, char *name);
 
 int64_t
-GetVideoMetadata(const char *path, char *name);
+GetVideoMetadata(const char *path, char *name, const char *parentID);
 
 #endif
