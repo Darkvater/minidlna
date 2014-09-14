@@ -1543,8 +1543,8 @@ video_no_dlna:
 	                   " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, '%q', %Q, %Q, %Q, %Q, %Q, '%q', %lld);",
 	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration,
 	                   m.date, m.channels, m.bitrate, m.frequency, m.resolution,
-			   m.title, m.creator, m.artist, m.genre, m.comment, m.dlna_pn,
-                           m.mime, album_art);
+	                   m.title, m.creator, m.artist, m.genre, m.comment, m.dlna_pn,
+	                   m.mime, album_art);
 	if( ret != SQLITE_OK )
 	{
 		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
