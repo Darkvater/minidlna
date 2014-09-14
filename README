@@ -34,3 +34,8 @@ Prerequisites
 
 
 Justin Maggard
+
+Features
+==================
+
+- add possibility to serve multiple-sized thumbnails based on client request
