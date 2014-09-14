@@ -270,7 +270,8 @@ insert_containers(const char *name, const char *path, const char *refID, const c
 		{
 			if( !valid_cache || strcmp(artist, last_artist.name) != 0 )
 			{
-				insert_container(artist, MUSIC_ARTIST_ID, NULL, "person.musicArtist", NULL, genre, NULL, &objectID, &parentID);
+				album_art = sql_get_text_field(db, "SELECT ALBUM_ART from DETAILS where PATH not NULL and TITLE like '%%%s'", artist);
+				insert_container(artist, MUSIC_ARTIST_ID, NULL, "person.musicArtist", NULL, genre, album_art, &objectID, &parentID);
 				sprintf(last_artist.parentID, MUSIC_ARTIST_ID"$%llX", (long long)parentID);
 				strncpyt(last_artist.name, artist, sizeof(last_artist.name));
 				last_artistAlbum.name[0] = '\0';
