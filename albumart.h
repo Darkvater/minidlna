@@ -24,7 +24,26 @@
 #ifndef __ALBUMART_H__
 #define __ALBUMART_H__
 
+typedef enum {
+	JPEG_TN,
+	JPEG_SM,
+	JPEG_MED,
+	JPEG_LRG,
+	JPEG_INV
+} image_size_type_enum;
+
+typedef struct
+{
+	image_size_type_enum type;
+	const char* name;
+	int width;
+	int height;
+} image_size_type_t;
+
 void update_if_album_art(const char *path);
 int64_t find_album_art(const char *path, uint8_t *image_data, int image_size);
+const image_size_type_t *get_image_size_type(image_size_type_enum size_type);
+char *get_path_from_image_size_type(const char *path, const image_size_type_t *image_size_type);
+char *save_resized_album_art_to(const char *src_file, const char *dst_file, const image_size_type_t *image_size_type);
 
 #endif
