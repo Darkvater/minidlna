@@ -411,7 +411,9 @@ GetFolderMetadata(const char *name, const char *path, const char *artist, const 
 
 	if (path != NULL) check_for_folder_nfo_name(path, name, &m);
 
-	return add_entry_to_details(path, 0, 0, &m, album_art_id);
+	int ret = add_entry_to_details(path, 0, 0, &m, album_art_id);
+	free_metadata(&m, ALL_FLAGS);
+	return ret;
 }
 
 int64_t
