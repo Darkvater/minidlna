@@ -94,6 +94,8 @@ const char *mime_to_ext(const char * mime);
 
 /* Others */
 int make_dir(char * path, mode_t mode);
+int copy_file(const char *src_file, const char *dst_file);
+int link_file(const char *src_file, const char *dst_file);
 unsigned int DJBHash(uint8_t *data, int len);
 
 #endif
