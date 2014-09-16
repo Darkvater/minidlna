@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <libgen.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -309,6 +310,59 @@ make_dir(char * path, mode_t mode)
 		*s = c;
 
 	} while (1);
+}
+
+int
+copy_file(const char *src_file, const char *dst_file)
+{
+	char buf[MAXPATHLEN];
+	size_t nread;
+	size_t nwritten = 0;
+	size_t size = 0;
+
+	strncpyt(buf, dst_file, sizeof(buf));
+	make_dir(dirname(buf), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+
+	FILE *fsrc = fopen(src_file, "rb");
+	FILE *fdst = fopen(dst_file, "wb");
+
+	while ((nread = fread(buf, sizeof(buf), 1, fsrc)) > 0)
+	{
+		size += nread;
+		nwritten += fwrite(buf, sizeof(buf), 1, fdst);
+	}
+
+	fclose(fsrc);
+	fclose(fdst);
+
+	if (nwritten != size)
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "copying %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+int
+link_file(const char *src_file, const char *dst_file)
+{
+	if (link(src_file, dst_file) == 0)
+	{
+		return 0;
+	}
+	else
+	{
+		if (errno == ENOENT)
+		{
+			char *dir = strdup(dst_file);
+			make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+			free(dir);
+			if (link(src_file, dst_file) == 0)
+				return 0;
+		}
+		DPRINTF(E_WARN, L_GENERAL, "Linking %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
+	}
+	return -1;
 }
 
 /* Simple, efficient hash function from Daniel J. Bernstein */

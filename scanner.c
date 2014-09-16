@@ -279,6 +279,7 @@ insert_containers(const char *name, const char *path, const char *refID, const c
 				insert_container(_("- All Albums -"), last_artist.parentID, NULL, "album", artist, genre, NULL, &objectID, &parentID);
 				sprintf(last_artistAlbumAll.parentID, "%s$%llX", last_artist.parentID, (long long)parentID);
 				last_artistAlbumAll.objectID = objectID;
+				sqlite3_free(album_art);
 			}
 			else
 			{

@@ -72,52 +72,13 @@ art_cache_exists(const char *orig_path, char **cache_file)
 }
 
 static int
-link_file(const char *src_file, const char *dst_file)
-{
-	if (link(src_file, dst_file) == 0)
-	{
-		return 0;
-	}
-	else
-	{
-		if (errno == ENOENT)
-		{
-			char *dir = strdup(dst_file);
-			make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-			free(dir);
-			if (link(src_file, dst_file) == 0)
-				return 0;
-		}
-		DPRINTF(E_WARN, L_METADATA, "Linking %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
-	}
-	return -1;
-}
-
-static char *
-save_album_art(const image_s *imsrc, const char *path)
-{
-	char *cache_file;
-	char cache_dir[MAXPATHLEN];
-
-	if (!imsrc)
-		return NULL;
-
-	if (art_cache_exists(path, &cache_file))
-		return cache_file;
-
-	strncpyt(cache_dir, cache_file, sizeof(cache_dir));
-	make_dir(dirname(cache_dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-
-	return image_save_to_jpeg_file(imsrc, cache_file);
-}
-
-static char *
 save_resized_album_art_from_imsrc_to(const image_s *imsrc, const char *src_file, const char *dst_file, const image_size_type_t *image_size_type)
 {
 	int dstw, dsth;
+	char *result;
 
 	if (!imsrc || !image_size_type)
-		return NULL;
+		return -1;
 
 	if (imsrc->width > imsrc->height)
 	{
@@ -132,40 +93,55 @@ save_resized_album_art_from_imsrc_to(const image_s *imsrc, const char *src_file,
 
 	if (dstw > imsrc->width && dsth > imsrc->height)
 	{
+		/* if requested dimensions are bigger than image, don't upsize but
+		 * link file or save as-is if linking fails */
 		int ret = link_file(src_file, dst_file);
-		return (ret == 0) ? (char*)dst_file : image_save_to_jpeg_file(imsrc, dst_file);
+		result = (ret == 0) ? (char*)dst_file : image_save_to_jpeg_file(imsrc, dst_file);
+	}
+	else
+	{
+		image_s *imdst = image_resize(imsrc, dstw, dsth);
+		result = image_save_to_jpeg_file(imdst, dst_file);
+		image_free(imdst);
 	}
 
+	if (result == NULL)
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "Failed to create albumart cache of '%s' to '%s' [%s]\n", src_file, dst_file, strerror(errno));
+		return -1;
+	}
 
-	image_s *imdst = image_resize(imsrc, dstw, dsth);
-	char *result = image_save_to_jpeg_file(imdst, dst_file);
-	image_free(imdst);
-
-	return result;
+	return 0;
 }
 
-char *
-save_resized_album_art_to(const char *src_file, const char *dst_file, const image_size_type_t *image_size_type)
+static char *
+save_resized_album_art_from_imsrc(const image_s *imsrc, const char *path, const image_size_type_t *image_size_type)
 {
-	image_s *imsrc = image_new_from_jpeg(src_file, 1, NULL, 0, 1, ROTATE_NONE);
-	char *dst = save_resized_album_art_from_imsrc_to(imsrc, src_file, dst_file, image_size_type);
-	free(imsrc);
-	return dst;
-}
-
-static void
-save_resized_album_art(const image_s *imsrc, const char *path, const image_size_type_t *image_size_type)
-{
-	char *cache_file, *resized_cache_file;
-
-	if (!imsrc || !image_size_type)
-		return;
+	char *cache_file, *dst_file;
+	if (!image_size_type)
+		return NULL;
 
 	art_cache_exists(path, &cache_file);
-	resized_cache_file = get_path_from_image_size_type(cache_file, image_size_type);
+	dst_file = get_path_from_image_size_type(cache_file, image_size_type);
+	free(cache_file);
 
-	save_resized_album_art_from_imsrc_to(imsrc, path, resized_cache_file, image_size_type);
-	free(resized_cache_file);
+	int ret = save_resized_album_art_from_imsrc_to(imsrc, path, dst_file, image_size_type);
+	if (ret != 0)
+	{
+		free(dst_file);
+		dst_file = NULL;
+	}
+
+	return dst_file;
+}
+
+int
+save_resized_album_art_from_file_to_file(const char *path, const char *dst_file, const image_size_type_t *image_size_type)
+{
+	image_s *imsrc = image_new_from_jpeg(path, 1, NULL, 0, 1, ROTATE_NONE);
+	int ret = save_resized_album_art_from_imsrc_to(imsrc, path, dst_file, image_size_type);
+	image_free(imsrc);
+	return ret;
 }
 
 /* And our main album art functions */
@@ -239,7 +215,7 @@ update_if_album_art(const char *path)
 char *
 check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 {
-	char *art_path = NULL;
+	char *art_path = NULL, *thumb_art_path = NULL;
 	image_s *imsrc;
 	static char last_path[PATH_MAX];
 	static unsigned int last_hash = 0;
@@ -276,20 +252,21 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 		return NULL;
 	}
 
-	art_path = save_album_art(imsrc, path);
+	art_path = save_resized_album_art_from_imsrc(imsrc, path, get_image_size_type(JPEG_MED));
 save_resized:
 	/* add a thumbnail version anticipiating a bit for the most likely access.
 	 * The webservice will generate other thumbs on the fly if not available */
-	save_resized_album_art(imsrc, path, get_image_size_type(JPEG_TN));
-
+	thumb_art_path = save_resized_album_art_from_imsrc(imsrc, path, get_image_size_type(JPEG_TN));
+	free(thumb_art_path);
 	image_free(imsrc);
+
 	if( !art_path )
 	{
-		DPRINTF(E_WARN, L_METADATA, "Invalid embedded album art in %s\n", basename((char *)path));
+		DPRINTF(E_WARN, L_ARTWORK, "Invalid embedded album art in %s\n", path);
 		last_success = 0;
 		return NULL;
 	}
-	DPRINTF(E_DEBUG, L_METADATA, "Found new embedded album art in %s\n", basename((char *)path));
+	DPRINTF(E_DEBUG, L_ARTWORK, "Found new embedded album art in %s\n", path);
 	last_success = 1;
 	strcpy(last_path, art_path);
 
@@ -351,13 +328,20 @@ check_dir:
 		if (access(file, R_OK) == 0)
 add_cached_image:
 		{
-			image_s *imsrc = image_new_from_jpeg(file, 1, NULL, 0, 1, ROTATE_NONE);
-			char *art_file = save_album_art(imsrc, file);
+			char *cache_file;
+
+			DPRINTF(E_DEBUG, L_ARTWORK, "Found album art in %s\n", file);
+			if (art_cache_exists(file, &cache_file))
+				return cache_file;
+
+			int ret = copy_file(file, cache_file);
 			/* add a thumbnail version anticipiating a bit for the most likely access.
 			* The webservice will generate other thumbs on the fly if not available */
-			save_resized_album_art(imsrc, file, get_image_size_type(JPEG_TN));
-			free(imsrc);
-			return art_file;
+			image_s *imsrc = image_new_from_jpeg(file, 1, NULL, 0, 1, ROTATE_NONE);
+			char *thumb = save_resized_album_art_from_imsrc(imsrc, file, get_image_size_type(JPEG_TN));
+			image_free(imsrc);
+			free(thumb);
+			return ret == 0 ? cache_file : NULL;
 		}
 	}
 
