@@ -389,10 +389,10 @@ add_entry_to_details(const char *path, size_t entry_size, time_t entry_timestamp
 	                       "  TITLE, CREATOR, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
 	                       "  ALBUM, TRACK, DISC, DLNA_PN, MIME, ALBUM_ART) "
 	                       "VALUES"
-	                       " (%Q, %lld, %ld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld);",
-	                       path, entry_size, entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->resolution,
+	                       " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld);",
+	                       path, (long long)entry_size, (long long)entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->resolution,
 	                       m->title, m->creator, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
-	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, album_art_id);
+	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, (long long)album_art_id);
 
 	if (ret != SQLITE_OK)
 	{
@@ -625,25 +625,9 @@ GetAudioMetadata(const char *path, char *name)
 	}
 
 	album_art = find_album_art(path, song.image, song.image_size);
+	ret = add_entry_to_details(path, file.st_size, file.st_mtime, &m, album_art);
 
-	ret = sql_exec(db, "INSERT into DETAILS"
-	                   " (PATH, SIZE, TIMESTAMP, DURATION, CHANNELS, BITRATE, SAMPLERATE, DATE,"
-	                   "  TITLE, CREATOR, ARTIST, ALBUM, GENRE, COMMENT, DESCRIPTION, DISC, TRACK, DLNA_PN, MIME, ALBUM_ART) "
-	                   "VALUES"
-	                   " (%Q, %lld, %lld, '%s', %d, %d, %d, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %d, %d, %Q, '%s', %lld);",
-	                   path, (long long)file.st_size, (long long)file.st_mtime, m.duration, song.channels, song.bitrate, song.samplerate, m.date,
-	                   m.title, m.creator, m.artist, m.album, m.genre, m.comment, m.description, song.disc, song.track,
-	                   m.dlna_pn, song.mime?song.mime:m.mime, album_art);
-	if( ret != SQLITE_OK )
-	{
-		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
-		ret = 0;
-	}
-	else
-	{
-		ret = sqlite3_last_insert_rowid(db);
-	}
-        freetags(&song);
+	freetags(&song);
 	free_metadata(&m, free_flags);
 
 	return ret;
