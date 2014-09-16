@@ -90,14 +90,14 @@ log_init(const char *fname, const char *debug)
 	if (debug)
 	{
 		const char *rhs, *lhs, *nlhs;
-		int level, facility;
-
-		rhs = nlhs = debug;
+		int facility;
+		
+		rhs = nlhs = (level == -1) ? debug : strchr(debug, ',');
 		while (rhs && (rhs = strchr(rhs, '='))) {
 			rhs++;
 			level = find_matching_name(rhs, level_name);
 			if (level == -1) {
-				DPRINTF(E_WARN, L_GENERAL, "unknown level in debug string: %s", debug);
+				DPRINTF(E_WARN, L_GENERAL, "unknown level in debug string: %s\n", debug);
 				continue;
 			}
 
@@ -107,7 +107,7 @@ log_init(const char *fname, const char *debug)
 				if (*lhs==',') lhs++;
 				facility = find_matching_name(lhs, facility_name);
 				if (facility == -1) {
-					DPRINTF(E_WARN, L_GENERAL, "unknown debug facility in debug string: %s", debug);
+					DPRINTF(E_WARN, L_GENERAL, "unknown debug facility in debug string: %s\n", debug);
 				} else {
 					log_level[facility] = level;
 				}
