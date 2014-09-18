@@ -34,17 +34,3 @@ Prerequisites
 
 
 Justin Maggard
-
-Features
-==================
-
-- support dynamic icons by loading from pkgdatadir/icons
-- add compatibility with LG2012 models
-- add new entries scanned from metadata: year, actors, director, (short/long) description, author, rating
-- add support for tv series / shows with metadata: air date, season, episode, episode title
-- improve UPNP reply types for video mime-type for director, album art, episodes
-- present metadata for folders to support virtual tv show folders.
-- support scanning multiple captions for a media (use language suffix .ENG, .HUN, etc.)
-  note: until there is a UI to support selection, only default caption will be returned which
-  is either the one without language, or the first one if there is no language
-- add option to ignore certain paths from scanning
