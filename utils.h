@@ -83,6 +83,7 @@ char *modifyString(char *string, const char *before, const char *after, int noal
 char *escape_tag(const char *tag, int force_alloc);
 char *unescape_tag(const char *tag, int force_alloc);
 char *strip_ext(char *name);
+char *strip_char(char *name, char c);
 
 /* Metadata functions */
 int is_video(const char * file);

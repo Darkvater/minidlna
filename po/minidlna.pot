@@ -40,6 +40,11 @@ msgstr ""
 msgid "Unknown Camera"
 msgstr ""
 
+#: scanner.c:183
+#, c-format
+msgid "Season %02d"
+msgstr ""
+
 #: scanner.c:277
 msgid "- All Albums -"
 msgstr ""
@@ -78,6 +83,14 @@ msgstr ""
 
 #: scanner.c:533 scanner.c:538 scanner.c:544
 msgid "Folders"
+msgstr ""
+
+#: scanner.c:616
+msgid "Tv Shows"
+msgstr ""
+
+#: scanner.c:616
+msgid "Movies"
 msgstr ""
 
 #: scanner.c:534
