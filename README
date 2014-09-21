@@ -43,3 +43,4 @@ Features
 - improve UPNP reply types for video mime-type for director, album art, episodes
 - present metadata for folders to support virtual tv show folders.
 - add option to ignore certain paths from scanning
+- new virtual containers, 'Tv Shows' and 'Movies'
