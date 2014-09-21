@@ -257,6 +257,7 @@ parse_movie_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
 	set_value_list_from_xml_if_exists(&m->artist, xml, "name");
+	m->videotype = MOVIE;
 }
 
 static void
@@ -271,6 +272,7 @@ parse_tvshow_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_list_from_xml_if_exists(&m->artist, xml, "name");
 
 	set_value_from_xml_if_exists(&m->date, xml, "capturedate"); // TiVO-specific
+	m->videotype = TVSERIES;
 }
 
 static void
@@ -301,6 +303,7 @@ parse_tvepisode_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->date, xml, "aired");
+	m->videotype = TVEPISODE;
 }
 
 static void
@@ -387,12 +390,12 @@ add_entry_to_details(const char *path, size_t entry_size, time_t entry_timestamp
 	int ret = sql_exec(db, "INSERT into DETAILS"
 	                       " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
 	                       "  TITLE, CREATOR, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
-	                       "  ALBUM, TRACK, DISC, DLNA_PN, MIME, ALBUM_ART) "
+	                       "  ALBUM, TRACK, DISC, DLNA_PN, MIME, ALBUM_ART, VIDEO_TYPE) "
 	                       "VALUES"
-	                       " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld);",
+	                       " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld, %d);",
 	                       path, (long long)entry_size, (long long)entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->resolution,
 	                       m->title, m->creator, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
-	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, (long long)album_art_id);
+	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, (long long)album_art_id, (int)m->videotype);
 
 	if (ret != SQLITE_OK)
 	{
