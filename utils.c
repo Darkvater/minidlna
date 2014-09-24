@@ -254,13 +254,17 @@ escape_tag(const char *tag, int force_alloc)
 char *
 strip_ext(char *name)
 {
-	char *period;
+	return strip_char(name, '.');
+}
 
-	period = strrchr(name, '.');
-	if (period)
-		*period = '\0';
+char *
+strip_char(char *name, char c)
+{
+	char *last_occurence = strrchr(name, c);
+	if (last_occurence)
+		*last_occurence = '\0';
 
-	return period;
+	return last_occurence;
 }
 
 /* Code basically stolen from busybox */

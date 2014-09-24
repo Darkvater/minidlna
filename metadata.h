@@ -24,6 +24,12 @@
 #ifndef __METADATA_H__
 #define __METADATA_H__
 
+typedef enum videotype {
+	MOVIE     = 1,
+	TVSERIES  = 2,
+	TVEPISODE = 3,
+} videotype_t;
+
 typedef struct metadata_s {
 	char *       title;
 	char *       artist;
@@ -47,6 +53,7 @@ typedef struct metadata_s {
 	char *       dlna_pn;
 	int          thumb_size;
 	uint8_t *    thumb_data;
+	videotype_t  videotype;
 } metadata_t;
 
 typedef enum {

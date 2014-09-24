@@ -44,6 +44,7 @@
 #define VIDEO_GENRE_ID		"2$9"
 #define VIDEO_ACTOR_ID		"2$A"
 #define VIDEO_SERIES_ID		"2$E"
+#define VIDEO_MOVIES_ID		"2$F"
 #define VIDEO_PLIST_ID		"2$10"
 #define VIDEO_DIR_ID		"2$15"
 #define VIDEO_RATING_ID		"2$200"
