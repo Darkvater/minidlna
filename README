@@ -44,3 +44,4 @@ Features
 - present metadata for folders to support virtual tv show folders.
 - add option to ignore certain paths from scanning
 - add possibility to serve multiple-sized thumbnails based on client request
+- support additional video containers like 'Tv Shows' and 'Movies' if metadata is available
