@@ -330,10 +330,10 @@ copy_file(const char *src_file, const char *dst_file)
 	FILE *fsrc = fopen(src_file, "rb");
 	FILE *fdst = fopen(dst_file, "wb");
 
-	while ((nread = fread(buf, sizeof(buf), 1, fsrc)) > 0)
+	while ((nread = fread(buf, 1, sizeof(buf), fsrc)) > 0)
 	{
 		size += nread;
-		nwritten += fwrite(buf, sizeof(buf), 1, fdst);
+		nwritten += fwrite(buf, 1, nread, fdst);
 	}
 
 	fclose(fsrc);
