@@ -520,6 +520,12 @@ struct linked_names_s * parse_delimited_list_of_options(char * input, const char
 	return return_value;
 }
 
+struct linked_names_s **find_last_linked_entry(struct linked_names_s **linked_entry)
+{
+	while (*linked_entry != NULL) { linked_entry = &(*linked_entry)->next; }
+	return linked_entry;
+}
+
 /* init phase :
  * 1) read configuration file
  * 2) read command line arguments
@@ -670,12 +676,14 @@ init(int argc, char **argv)
 			else
 				media_dirs = media_dir;
 			break;
-		case UPNPALBUMART_NAMES:
-			album_art_names = parse_delimited_list_of_options(ary_options[i].value, "/");
-			break;
-		case SCANNER_IGNORE:
-			ignore_paths = parse_delimited_list_of_options(ary_options[i].value, "/");
-			break;
+		case UPNPALBUMART_NAMES: {
+			struct linked_names_s **values = find_last_linked_entry(&album_art_names);
+			*values = parse_delimited_list_of_options(ary_options[i].value, "/");
+		} break;
+		case SCANNER_IGNORE: {
+			struct linked_names_s **values = find_last_linked_entry(&ignore_paths);
+			*values = parse_delimited_list_of_options(ary_options[i].value, "/");
+		} break;
 		case UPNPDBDIR:
 			path = realpath(ary_options[i].value, buf);
 			if (!path)
