@@ -779,10 +779,7 @@ init(int argc, char **argv)
 	}
 	if (log_path[0] == '\0')
 	{
-		if (db_path[0] == '\0')
-			strncpyt(log_path, DEFAULT_LOG_PATH, PATH_MAX);
-		else
-			strncpyt(log_path, db_path, PATH_MAX);
+		strncpyt(log_path, DEFAULT_LOG_PATH, PATH_MAX);
 	}
 	if (db_path[0] == '\0')
 		strncpyt(db_path, DEFAULT_DB_PATH, PATH_MAX);
