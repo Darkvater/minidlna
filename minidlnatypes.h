@@ -73,15 +73,15 @@ enum file_types {
 };
 
 struct media_dir_s {
+	struct media_dir_s *next; /* needs to be first element! */
  	char *path;             /* base path */
  	media_types types;      /* types of files to scan */
- 	struct media_dir_s *next;
 };
 
-struct album_art_name_s {
+struct linked_names_s {
+	struct linked_names_s *next; /* needs to be first element! */
 	char *name;             /* base path */
 	uint8_t wildcard;
-	struct album_art_name_s *next;
 };
 
 #endif

@@ -53,6 +53,7 @@ static const struct {
 	{ UPNPFRIENDLYNAME, "friendly_name"},
 	{ UPNPMEDIADIR, "media_dir"},
 	{ UPNPALBUMART_NAMES, "album_art_names"},
+	{ SCANNER_IGNORE, "ignore_paths"},
 	{ UPNPINOTIFY, "inotify" },
 	{ UPNPDBDIR, "db_dir" },
 	{ UPNPLOGDIR, "log_dir" },
@@ -179,11 +180,21 @@ readoptionsfile(const char * fname)
 	return 0;
 }
 
+void free_linked_names_s(struct linked_names_s *names)
+{
+	while (names)
+	{
+		struct linked_names_s *last_name = names;
+		free(last_name->name);
+		names = names->next;
+		free(last_name);
+	}
+}
+
 void
 freeoptions(void)
 {
 	struct media_dir_s *media_path, *last_path;
-	struct album_art_name_s *art_names, *last_name;
 	
 	media_path = media_dirs;
 	while (media_path)
@@ -194,14 +205,8 @@ freeoptions(void)
 		free(last_path);
 	}
 
-	art_names = album_art_names;
-	while (art_names)
-	{
-		free(art_names->name);
-		last_name = art_names;
-		art_names = art_names->next;
-		free(last_name);
-	}
+	free_linked_names_s(album_art_names);
+	free_linked_names_s(ignore_paths);
 
 	if(ary_options)
 	{

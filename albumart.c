@@ -264,7 +264,7 @@ check_for_album_file(const char *path)
 {
 	char file[MAXPATHLEN];
 	char mypath[MAXPATHLEN];
-	struct album_art_name_s *album_art_name;
+	struct linked_names_s *album_art_name;
 	image_s *imsrc = NULL;
 	int width=0, height=0;
 	char *art_file, *p;

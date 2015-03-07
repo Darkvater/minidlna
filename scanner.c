@@ -469,7 +469,7 @@ insert_file(char *name, const char *path, const char *parentID, int object, medi
  		orig_name = strdup(name);
 		strcpy(base, VIDEO_DIR_ID);
 		strcpy(class, "item.videoItem");
-		detailID = GetVideoMetadata(path, name);
+		detailID = GetVideoMetadata(path, name, parentID);
 		if( !detailID )
 			strcpy(name, orig_name);
 	}
@@ -615,6 +615,17 @@ sql_failed:
 	return (ret != SQLITE_OK);
 }
 
+static int
+filter_ignored(scan_filter *d)
+{
+	struct linked_names_s *ignored_path;
+	for (ignored_path = ignore_paths; ignored_path; ignored_path = ignored_path->next)
+	{
+		if (strstr(d->d_name, ignored_path->name) != NULL) return 0;
+	}
+	return 1;
+}
+
 static inline int
 filter_hidden(scan_filter *d)
 {
@@ -637,7 +648,7 @@ filter_type(scan_filter *d)
 static int
 filter_a(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 		   (is_audio(d->d_name) ||
@@ -648,7 +659,7 @@ filter_a(scan_filter *d)
 static int
 filter_av(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 		   (is_audio(d->d_name) ||
@@ -660,7 +671,7 @@ filter_av(scan_filter *d)
 static int
 filter_ap(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 		   (is_audio(d->d_name) ||
@@ -672,7 +683,7 @@ filter_ap(scan_filter *d)
 static int
 filter_v(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 	           is_video(d->d_name)))
@@ -682,7 +693,7 @@ filter_v(scan_filter *d)
 static int
 filter_vp(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 		   (is_video(d->d_name) ||
@@ -693,7 +704,7 @@ filter_vp(scan_filter *d)
 static int
 filter_p(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 		   is_image(d->d_name)))
@@ -703,7 +714,7 @@ filter_p(scan_filter *d)
 static int
 filter_avp(scan_filter *d)
 {
-	return ( filter_hidden(d) &&
+	return (filter_hidden(d) && filter_ignored(d) &&
 	         (filter_type(d) ||
 		  (is_reg(d) &&
 		   (is_audio(d->d_name) ||
