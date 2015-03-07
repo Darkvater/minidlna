@@ -226,6 +226,9 @@ parse_tvshow_nfo(struct NameValueParserData *xml, metadata_t *m)
 	if (strcmp("tvshow", GetValueFromNameValueList(xml, "rootElement")) != 0) return;
 
 	set_value_from_xml_if_exists(&m->album, xml, "title");
+	set_value_from_xml_if_exists(&m->date, xml, "premiered");
+	set_value_from_xml_if_exists(&m->description, xml, "plot");
+	set_value_from_xml_if_exists(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
 	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
@@ -260,6 +263,7 @@ parse_tvepisode_nfo(struct NameValueParserData *xml, metadata_t *m)
 		free(title);
 	}
 
+	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->date, xml, "aired");
@@ -523,7 +527,7 @@ GetAudioMetadata(const char *path, char *name)
 	{
 		m.title = name;
 	}
-	for( i=ROLE_START; i<N_ROLE; i++ )
+	for( i = ROLE_START; i < N_ROLE; i++ )
 	{
 		if( song.contributor[i] && *song.contributor[i] )
 		{
@@ -542,12 +546,17 @@ GetAudioMetadata(const char *path, char *name)
 			break;
 		}
 	}
-	/* If there is a band associated with the album, use it for virtual containers. */
-	if( (i != ROLE_BAND) && (i != ROLE_ALBUMARTIST) )
+	/* If there is a album artist or band associated with the album,
+	   use it for virtual containers. */
+	if( i < ROLE_ALBUMARTIST )
 	{
-	        if( song.contributor[ROLE_BAND] && *song.contributor[ROLE_BAND] )
+		for( i = ROLE_ALBUMARTIST; i <= ROLE_BAND; i++ )
 		{
-			i = ROLE_BAND;
+	        	if( song.contributor[i] && *song.contributor[i] )
+				break;
+		}
+	        if( i <= ROLE_BAND )
+		{
 			m.artist = trim(song.contributor[i]);
 			if( strlen(m.artist) > 48 )
 			{

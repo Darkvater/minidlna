@@ -742,16 +742,19 @@ object_exists(const char *object)
 #define COLUMNS "o.DETAIL_ID, o.CLASS," \
                 " d.SIZE, d.TITLE, d.DURATION, d.BITRATE, d.SAMPLERATE, d.ARTIST," \
                 " d.ALBUM, d.GENRE, d.COMMENT, d.DESCRIPTION, d.CHANNELS, d.TRACK, d.DATE, d.RESOLUTION," \
-                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.DISC, d.RATING, d.AUTHOR "
+                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.ROTATION, d.DISC, d.RATING, d.AUTHOR "
 #define SELECT_COLUMNS "SELECT o.OBJECT_ID, o.PARENT_ID, o.REF_ID, " COLUMNS
+
+#define NON_ZERO(x) (x && atoi(x))
+#define IS_ZERO(x) (!x || !atoi(x))
 
 static int
 append_multiple_from_commaseparated_string(struct string_s *str, const char *value, const char *elementName)
 {
-	int ret = 0;
+	int ret = 0, counter;
 	char *cpy_val = strdup(value);
 	char *pch;
-	for (pch = strrchr(cpy_val, ','); pch != NULL; pch = strrchr(cpy_val, ','))
+	for (pch = strrchr(cpy_val, ','), counter = 0; pch != NULL && counter < 5; pch = strrchr(cpy_val, ','), counter++)
 	{
 		ret += strcatf(str, "&lt;%s&gt;%s&lt;/%s&gt;", elementName, pch+1, elementName);
 		*pch = '\0';
@@ -782,7 +785,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 	     *duration = argv[7], *bitrate = argv[8], *sampleFrequency = argv[9], *artists = argv[10], *album = argv[11],
 	     *genres = argv[12], *comment = argv[13], *description = argv[14], * nrAudioChannels = argv[15], *track = argv[16], *date = argv[17],
 	     *resolution = argv[18], *tn = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22],
-	     *album_art = argv[23]/*, *disc = argv[24]*/, *rating = argv[25], *author = argv[26];
+	     *album_art = argv[23], *rotate = argv[24]/*, *disc = argv[25]*/, *rating = argv[26], *author = argv[27];
 	char dlna_buf[128];
 	const char *ext;
 	struct string_s *str = passed_args->str;
@@ -967,7 +970,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( strncmp(id, MUSIC_PLIST_ID, strlen(MUSIC_PLIST_ID)) == 0 ) {
 			track = strrchr(id, '$')+1;
 		}
-		if( track && atoi(track) && (passed_args->filter & FILTER_UPNP_ORIGINALTRACKNUMBER) ) {
+		if( NON_ZERO(track) && (passed_args->filter & FILTER_UPNP_ORIGINALTRACKNUMBER) ) {
 			ret = append(str, track, *mime == 'v' ? "upnp:episodeNumber" : "upnp:originalTrackNumber");
 		}
 		if( passed_args->filter & FILTER_RES ) {
@@ -985,7 +988,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 					if( srcw > 640 || srch > 480 )
 						add_resized_res(srcw, srch, 640, 480, "JPEG_SM", detailID, passed_args);
 				}
-				if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && tn && atoi(tn) ) {
+				if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && NON_ZERO(tn) && IS_ZERO(rotate) ) {
 					ret = strcatf(str, "&lt;res protocolInfo=\"http-get:*:%s:%s\"&gt;"
 					                   "http://%s:%d/Thumbnails/%s.jpg"
 					                   "&lt;/res&gt;",
@@ -1085,7 +1088,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 				}
 			}
 		}
-		if( album_art && atoi(album_art) )
+		if( NON_ZERO(album_art) )
 		{
 			/* Video and audio album art is handled differently */
 			if( *mime == 'v' && (passed_args->filter & FILTER_RES) && !(passed_args->flags & FLAG_MS_PFS) ) {
@@ -1116,7 +1119,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 				ret = strcatf(str, "&lt;upnp:album&gt;%s&lt;/upnp:album&gt;", "[No Keywords]");
 
 			/* EVA2000 doesn't seem to handle embedded thumbnails */
-			if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && tn && atoi(tn) ) {
+			if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && NON_ZERO(tn) && IS_ZERO(rotate) ) {
 				ret = strcatf(str, "&lt;upnp:albumArtURI&gt;"
 				                   "http://%s:%d/Thumbnails/%s.jpg"
 				                   "&lt;/upnp:albumArtURI&gt;",
@@ -1163,7 +1166,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( artists && (passed_args->filter & FILTER_UPNP_ACTOR) ) {
 			ret = append_multiple_from_commaseparated_string(str, artists, "upnp:artist");
 		}
-		if( album_art && atoi(album_art) && (passed_args->filter & FILTER_UPNP_ALBUMARTURI)) {
+		if( NON_ZERO(album_art) && (passed_args->filter & FILTER_UPNP_ALBUMARTURI)) {
 			char *attribute = (passed_args->filter & FILTER_UPNP_ALBUMARTURI_DLNA_PROFILEID) ? "dlna:profileID=\"JPEG_TN\" xmlns:dlna=\"urn:schemas-dlna-org:metadata-1-0/\"" : "";
 			snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/AlbumArt/%s-%d.jpg", lan_addr[passed_args->iface].str, runtime_vars.port, album_art, 0);
 			append_with_attributes(str, attribute, dlna_buf, "upnp:albumArtURI");
