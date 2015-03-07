@@ -747,10 +747,10 @@ object_exists(const char *object)
 static int
 append_multiple_from_commaseparated_string(struct string_s *str, const char *value, const char *elementName)
 {
-	int ret = 0;
+	int ret = 0, counter;
 	char *cpy_val = strdup(value);
 	char *pch;
-	for (pch = strrchr(cpy_val, ','); pch != NULL; pch = strrchr(cpy_val, ','))
+	for (pch = strrchr(cpy_val, ','), counter = 0; pch != NULL && counter < 5; pch = strrchr(cpy_val, ','), counter++)
 	{
 		ret += strcatf(str, "&lt;%s&gt;%s&lt;/%s&gt;", elementName, pch+1, elementName);
 		*pch = '\0';
