@@ -494,6 +494,13 @@ struct linked_names_s * parse_delimited_list_of_options(char * input, const char
 	return return_value;
 }
 
+static void
+add_element_to_linked_list(void **root, void* entry)
+{
+	while (*root != NULL) root = (void**)&(*(char*)*root); // make use of the fact that the next pointer is the first element
+	*root = entry;
+}
+
 /* init phase :
  * 1) read configuration file
  * 2) read command line arguments
@@ -519,9 +526,7 @@ init(int argc, char **argv)
 	char buf[PATH_MAX];
 	char log_str[75] = "general,artwork,database,inotify,scanner,metadata,http,ssdp,tivo=warn";
 	char *log_level = NULL;
-	struct media_dir_s *media_dir;
 	int ifaces = 0;
-	media_types types;
 	uid_t uid = 0;
 
 	/* first check if "-f" option is used */
@@ -588,7 +593,7 @@ init(int argc, char **argv)
 			break;
 		case UPNPSERIAL:
 			strncpyt(serialnumber, ary_options[i].value, SERIALNUMBER_MAX_LEN);
-			break;				
+			break;
 		case UPNPMODEL_NAME:
 			strncpyt(modelname, ary_options[i].value, MODELNAME_MAX_LEN);
 			break;
@@ -598,8 +603,9 @@ init(int argc, char **argv)
 		case UPNPFRIENDLYNAME:
 			strncpyt(friendly_name, ary_options[i].value, FRIENDLYNAME_MAX_LEN);
 			break;
-		case UPNPMEDIADIR:
-			types = ALL_MEDIA;
+		case UPNPMEDIADIR: {
+			struct media_dir_s *media_dir;
+			media_types types = ALL_MEDIA;
 			path = ary_options[i].value;
 			word = strchr(path, ',');
 			if (word && (access(path, F_OK) != 0))
@@ -634,22 +640,16 @@ init(int argc, char **argv)
 			media_dir = calloc(1, sizeof(struct media_dir_s));
 			media_dir->path = strdup(path);
 			media_dir->types = types;
-			if (media_dirs)
-			{
-				struct media_dir_s *all_dirs = media_dirs;
-				while( all_dirs->next )
-					all_dirs = all_dirs->next;
-				all_dirs->next = media_dir;
-			}
-			else
-				media_dirs = media_dir;
-			break;
-		case UPNPALBUMART_NAMES:
-			album_art_names = parse_delimited_list_of_options(ary_options[i].value, "/");
-			break;
-		case SCANNER_IGNORE:
-			ignore_paths = parse_delimited_list_of_options(ary_options[i].value, "/");
-			break;
+			add_element_to_linked_list((void**)&media_dirs, media_dir);
+		} break;
+		case UPNPALBUMART_NAMES: {
+			struct linked_names_s *album_art_name = parse_delimited_list_of_options(ary_options[i].value, "/");
+			add_element_to_linked_list((void**)&album_art_names, album_art_name);
+		} break;
+		case SCANNER_IGNORE: {
+			struct linked_names_s *ignore_path = parse_delimited_list_of_options(ary_options[i].value, "/");
+			add_element_to_linked_list((void**)&ignore_paths, ignore_path);
+		} break;
 		case UPNPDBDIR:
 			path = realpath(ary_options[i].value, buf);
 			if (!path)
