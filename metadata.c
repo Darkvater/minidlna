@@ -265,6 +265,9 @@ parse_tvshow_nfo(struct NameValueParserData *xml, metadata_t *m)
 	if (strcmp("tvshow", GetValueFromNameValueList(xml, "rootElement")) != 0) return;
 
 	set_value_from_xml_if_exists(&m->album, xml, "title");
+	set_value_from_xml_if_exists(&m->date, xml, "premiered");
+	set_value_from_xml_if_exists(&m->description, xml, "plot");
+	set_value_from_xml_if_exists(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
 	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
@@ -298,6 +301,7 @@ parse_tvepisode_nfo(struct NameValueParserData *xml, metadata_t *m)
 		free(title);
 	}
 
+	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->date, xml, "aired");
