@@ -176,6 +176,28 @@ check_for_captions(const char *path, int64_t detailID)
 void
 check_for_metadata(const char *path)
 {
+	if (ends_with(path, "tvshow.nfo"))
+	{
+		int nrows;
+		char **result;
+		char file[MAXPATHLEN];
+		strncpyt(file, path, sizeof(file));
+		char * buf = sqlite3_mprintf("SELECT ID from DETAILS where PATH glob '%q/*' and MIME glob 'video/*'", dirname(file));
+
+		if (sql_get_table(db, buf, &result, &nrows, NULL) == SQLITE_OK)
+		{
+			int i;
+			for (i = 1; i <= nrows; i++)
+			{
+				int64_t detailID = atoll(result[i]);
+				GetNfoMetadata(path, detailID);
+			}
+			sqlite3_free_table(result);
+		}
+		sqlite3_free(buf);
+		return;
+	}
+
 	int64_t detailID = get_detailID_from_path_without_suffix(path, '.');
 	if (detailID <= 0 && ends_with(path, "movie.nfo")) detailID = get_detailID_from_path_without_suffix(path, '/');
 	if (detailID <= 0) return;
@@ -220,6 +242,12 @@ set_value_from_xml_if_exists(char **dest, struct NameValueParserData *xml, const
 }
 
 void
+set_value_from_xml_if_exists_no_overwrite(char **dest, struct NameValueParserData *xml, const char *name)
+{
+	if (!*dest) set_value_from_xml_if_exists(dest, xml, name);
+}
+
+void
 set_value_list_from_xml_if_exists(char **dest, struct NameValueParserData *xml, const char *name)
 {
 	char *result = calloc(MAXPATHLEN, 1);
@@ -240,6 +268,12 @@ set_value_list_from_xml_if_exists(char **dest, struct NameValueParserData *xml, 
 		*dest = strdup(&result[1]); /* get rid of starting comma */
 	}
 	free(result);
+}
+
+void
+set_value_list_from_xml_if_exists_no_overwrite(char **dest, struct NameValueParserData *xml, const char *name)
+{
+	if (!*dest) set_value_list_from_xml_if_exists(dest, xml, name);
 }
 
 static int
@@ -291,11 +325,11 @@ parse_tvshow_nfo(struct NameValueParserData *xml, metadata_t *m)
 	if (strcmp("tvshow", GetValueFromNameValueList(xml, "rootElement")) != 0) return;
 
 	set_value_from_xml_if_exists(&m->album, xml, "title");
-	set_value_from_xml_if_exists(&m->date, xml, "premiered");
-	set_value_from_xml_if_exists(&m->description, xml, "plot");
-	set_value_from_xml_if_exists(&m->creator, xml, "director");
+	set_value_from_xml_if_exists_no_overwrite(&m->date, xml, "premiered");
+	set_value_from_xml_if_exists_no_overwrite(&m->description, xml, "plot");
+	set_value_from_xml_if_exists_no_overwrite(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
-	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
+	set_value_list_from_xml_if_exists_no_overwrite(&m->author, xml, "writer");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
 	set_value_list_from_xml_if_exists(&m->artist, xml, "name");
 
