@@ -299,6 +299,8 @@ inotify_insert_file(char * name, const char * path)
 		update_if_album_art(path);
 	else if( is_caption(path) )
 		check_for_captions(path, 0);
+	else if (is_metadata(path))
+		check_for_metadata(path);
 
 	/* Check if we're supposed to be scanning for this file type in this directory */
 	while( media_path )

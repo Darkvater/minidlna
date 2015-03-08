@@ -440,6 +440,12 @@ is_caption(const char * file)
 }
 
 int
+is_metadata(const char * file)
+{
+	return ends_with(file, ".nfo");
+}
+
+int
 is_album_art(const char * name)
 {
 	struct linked_names_s * album_art_name;
