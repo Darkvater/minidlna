@@ -254,7 +254,7 @@ parse_movie_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
 	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
-	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
+	set_value_list_from_xml_if_exists(&m->author, xml, "writer");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
 	set_value_list_from_xml_if_exists(&m->artist, xml, "name");
 }
