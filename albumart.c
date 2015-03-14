@@ -157,7 +157,6 @@ update_if_album_art(const char *path)
 	int album_art;
 	DIR *dh;
 	struct dirent *dp;
-	enum file_types type = TYPE_UNKNOWN;
 	int64_t art_id = 0;
 	int ret;
 
@@ -182,19 +181,9 @@ update_if_album_art(const char *path)
 		return;
 	while ((dp = readdir(dh)) != NULL)
 	{
-		if (is_reg(dp) == 1)
-		{
-			type = TYPE_FILE;
-		}
-		else if (is_dir(dp) == 1)
-		{
-			type = TYPE_DIR;
-		}
-		else
-		{
-			snprintf(file, sizeof(file), "%s/%s", dir, dp->d_name);
-			type = resolve_unknown_type(file, ALL_MEDIA);
-		}
+		snprintf(file, sizeof(file), "%s/%s", dir, dp->d_name);
+		enum file_types type = resolve_file_type(dp, file, ALL_MEDIA);
+
 		if( type != TYPE_FILE )
 			continue;
 		if( (dp->d_name[0] != '.') &&

@@ -122,6 +122,12 @@ fill_playlists(void)
 	int64_t plID, detailID;
 	char sql_buf[] = "SELECT ID, NAME, PATH from PLAYLISTS where ITEMS > FOUND";
 
+	if (GETFLAG(NO_PLAYLIST_MASK))
+	{
+		DPRINTF(E_WARN, L_SCANNER, "Playlist creation disabled\n");
+		return -1;
+	}
+
 	DPRINTF(E_WARN, L_SCANNER, "Parsing playlists...\n");
 
 	if( sql_get_table(db, sql_buf, &result, &rows, NULL) != SQLITE_OK ) 

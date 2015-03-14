@@ -48,6 +48,7 @@ enum upnpconfigoptions {
 	UPNPALBUMART_NAMES,		/* list of '/'-delimited file names to check for album art */
 	SCANNER_IGNORE,		/* list of '/'-delimited file names to ignore when scanning for media */
 	UPNPINOTIFY,			/* enable inotify on the media directories */
+	RESCANINTERVAL,         /* integer value to specifiy rescan media directories interval */
 	UPNPDBDIR,			/* base directory to store the database and album art cache */
 	UPNPLOGDIR,			/* base directory to store the log file */
 	UPNPLOGLEVEL,			/* logging verbosity */

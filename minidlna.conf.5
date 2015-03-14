@@ -126,6 +126,13 @@ log_level=general,artwork,database,inotify,scanner,metadata,http,ssdp,tivo=warn
 Set to 'yes' to enable inotify monitoring of the files under media_dir 
 to automatically discover new files. Set to 'no' to disable inotify.
 
+.IP "\fBrescan_interval\fP"
+Set to a number (in minutes) to specify the media_dir rescan interval
+to find and process new/changed/removed media. Only needed to be set on systems
+where fs notifications are not working, for example media loaded through NFS
+or in the absence of inotify
+This setting is disabled by default (no value)
+
 .IP "\fBalbum_art_names\fP"
 This should be a list of file names to check for when searching for album art
 and names should be delimited with a forward slash ("/").

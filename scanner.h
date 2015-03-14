@@ -24,6 +24,8 @@
 #ifndef __SCANNER_H__
 #define __SCANNER_H__
 
+#include <dirent.h>
+
 /* Try to be generally PlaysForSure compatible by using similar IDs */
 #define BROWSEDIR_ID		"64"
 
@@ -72,6 +74,9 @@ is_image(const char *file);
 int64_t
 get_next_available_id(const char *table, const char *parentID);
 
+int
+get_directory_entries(struct dirent ***namelist, const char *dir, media_types dir_types);
+
 int64_t
 insert_directory(const char *name, const char *path, const char *base, const char *parentID, int objectID);
 
@@ -83,5 +88,8 @@ CreateDatabase(void);
 
 void
 start_scanner();
+
+void
+start_rescanner();
 
 #endif

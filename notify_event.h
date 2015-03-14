@@ -1,4 +1,4 @@
-/* Inotify
+/* File notification events
 *
 * Project : minidlna
 * Website : http://sourceforge.net/projects/minidlna/
@@ -21,11 +21,14 @@
 * You should have received a copy of the GNU General Public License
 * along with MiniDLNA. If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef __INOTIFY_H__
-#define __INOTIFY_H__
+#ifndef __NOTIFY_EVENT_H__
+#define __NOTIFY_EVENT_H__
 
-#ifdef HAVE_INOTIFY
-void *start_inotify();
-#endif
+typedef int(*insert_callback)(const char *path);
 
-#endif
+int notify_event_insert_directory(const char *name, const char *path, media_types types, insert_callback callback);
+int notify_event_remove_directory(const char *path);
+int notify_event_insert_file(char* name, const char* path, media_types types);
+int notify_event_remove_file(const char *path);
+
+#endif /* __NOTIFY_EVENT_H__ */

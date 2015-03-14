@@ -100,6 +100,8 @@
 # warning "Your SQLite3 library appears to be too old!  Please use 3.5.1 or newer."
 # define sqlite3_threadsafe() 0
 #endif
+
+static int force_rescan = 0;
  
 /* OpenAndConfHTTPSocket() :
  * setup the socket used to handle incoming HTTP connections. */
@@ -167,12 +169,30 @@ sigusr1(int sig)
 }
 
 static void
+sigusr2(int sig)
+{
+	signal(sig, sigusr2);
+	DPRINTF(E_WARN, L_GENERAL, "received signal %d, forcing rescan\n", sig);
+
+	// will cause a segfault if rescanner called directly from signal callback
+	force_rescan = 1;
+}
+
+static void
 sighup(int sig)
 {
 	signal(sig, sighup);
 	DPRINTF(E_WARN, L_GENERAL, "received signal %d, re-read\n", sig);
 
 	reload_ifaces(1);
+}
+
+static void*
+start_rescanner_thread(void *arg)
+{
+	force_rescan = 0;
+	start_rescanner();
+	return NULL;
 }
 
 /* record the startup time */
@@ -701,6 +721,12 @@ init(int argc, char **argv)
 			if (!strtobool(ary_options[i].value))
 				CLEARFLAG(INOTIFY_MASK);
 			break;
+		case RESCANINTERVAL:
+			if (!is_sqlite3_threadsafe())
+				DPRINTF(E_FATAL, L_GENERAL, "SQLite library is not threadsafe! Periodic rescan will be disabled.\n");
+			else
+				runtime_vars.rescan_interval = atoi(ary_options[i].value) * 60;
+			break;
 		case ENABLE_TIVO:
 			if (strtobool(ary_options[i].value))
 				SETFLAG(TIVO_MASK);
@@ -997,6 +1023,7 @@ init(int argc, char **argv)
 	if (signal(SIGHUP, &sighup) == SIG_ERR)
 		DPRINTF(E_FATAL, L_GENERAL, "Failed to set %s handler. EXITING.\n", "SIGHUP");
 	signal(SIGUSR1, &sigusr1);
+	signal(SIGUSR2, &sigusr2);
 	sa.sa_handler = process_handle_child_termination;
 	if (sigaction(SIGCHLD, &sa, NULL))
 		DPRINTF(E_FATAL, L_GENERAL, "Failed to set %s handler. EXITING.\n", "SIGCHLD");
@@ -1039,12 +1066,12 @@ main(int argc, char **argv)
 	struct upnphttp * next;
 	fd_set readset;	/* for select() */
 	fd_set writeset;
-	struct timeval timeout, timeofday, lastnotifytime = {0, 0};
+	struct timeval timeout, timeofday, lastnotifytime = {0, 0}, lastrescantime = {0, 0};
 	time_t lastupdatetime = 0;
 	int max_fd = -1;
 	int last_changecnt = 0;
 	pid_t scanner_pid = 0;
-	pthread_t inotify_thread = 0;
+	pthread_t inotify_thread = 0, rescan_thread = 0;
 #ifdef TIVO_SUPPORT
 	uint8_t beacon_interval = 5;
 	int sbeacon = -1;
@@ -1079,10 +1106,10 @@ main(int argc, char **argv)
 #ifdef HAVE_INOTIFY
 	if( GETFLAG(INOTIFY_MASK) )
 	{
-		if (!sqlite3_threadsafe() || sqlite3_libversion_number() < 3005001)
-			DPRINTF(E_ERROR, L_GENERAL, "SQLite library is not threadsafe!  "
-			                            "Inotify will be disabled.\n");
-		else if (pthread_create(&inotify_thread, NULL, start_inotify, NULL) != 0)
+		if (!is_sqlite3_threadsafe())
+		{
+			DPRINTF(E_ERROR, L_GENERAL, "SQLite library is not threadsafe! Inotify will be disabled.\n");
+		} else if (pthread_create(&inotify_thread, NULL, start_inotify, NULL) != 0)
 			DPRINTF(E_FATAL, L_GENERAL, "ERROR: pthread_create() failed for start_inotify. EXITING\n");
 	}
 #endif
@@ -1122,6 +1149,7 @@ main(int argc, char **argv)
 
 	reload_ifaces(0);
 	lastnotifytime.tv_sec = time(NULL) + runtime_vars.notify_interval;
+	lastrescantime.tv_sec = time(NULL) + runtime_vars.rescan_interval;
 
 	/* main loop */
 	while (!quitting)
@@ -1183,6 +1211,15 @@ main(int argc, char **argv)
 					timeout.tv_sec = lastbeacontime.tv_sec + beacon_interval - timeofday.tv_sec;
 			}
 #endif
+			if (runtime_vars.rescan_interval && (timeofday.tv_sec >= (lastrescantime.tv_sec + runtime_vars.rescan_interval) || force_rescan))
+			{
+				if (rescan_thread && pthread_kill(rescan_thread, 0) != ESRCH)
+					DPRINTF(E_WARN, L_GENERAL, "Rescan thread is still busy, retrying at next scheduled interval");
+				else if (pthread_create(&rescan_thread, NULL, start_rescanner_thread, NULL) != 0)
+					DPRINTF(E_ERROR, L_GENERAL, "ERROR: pthread_create() failed for start_rescan, not rescanning media dir\n");
+
+				memcpy(&lastrescantime, &timeofday, sizeof(struct timeval));
+			}
 		}
 
 		if (scanning)
@@ -1359,6 +1396,9 @@ shutdown:
 
 	if (inotify_thread)
 		pthread_join(inotify_thread, NULL);
+
+	if (rescan_thread)
+		pthread_join(rescan_thread, NULL);
 
 	sql_exec(db, "UPDATE SETTINGS set VALUE = '%u' where KEY = 'UPDATE_ID'", updateID);
 	sqlite3_close(db);

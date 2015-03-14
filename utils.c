@@ -498,6 +498,12 @@ is_caption(const char * file)
 }
 
 int
+is_metadata(const char * file)
+{
+	return ends_with(file, ".nfo");
+}
+
+int
 is_album_art(const char * name)
 {
 	struct linked_names_s * album_art_name;
@@ -565,8 +571,25 @@ resolve_unknown_type(const char * path, media_types dir_type)
 					    is_playlist(path) )
 						type = TYPE_FILE;
 					break;
+				case TYPE_AUDIO | TYPE_VIDEO:
+					if( is_audio(path) ||
+					    is_video(path) ||
+					    is_playlist(path))
+						type = TYPE_FILE;
+						break;
+				case TYPE_AUDIO | TYPE_IMAGES:
+					if( is_image(path) ||
+					    is_audio(path) ||
+					    is_playlist(path) )
+						type = TYPE_FILE;
+					break;
 				case TYPE_VIDEO:
 					if( is_video(path) )
+						type = TYPE_FILE;
+					break;
+				case TYPE_VIDEO | TYPE_IMAGES:
+					if( is_image(path) ||
+					    is_video(path) )
 						type = TYPE_FILE;
 					break;
 				case TYPE_IMAGES:
@@ -579,5 +602,14 @@ resolve_unknown_type(const char * path, media_types dir_type)
 		}
 	}
 	return type;
+}
+
+enum file_types
+resolve_file_type(const struct dirent* dirent, const char *path, media_types dir_types)
+{
+	if (is_dir(dirent) == 1) return TYPE_DIR;
+	if (is_reg(dirent) == 1) return TYPE_FILE;
+
+	return resolve_unknown_type(path, dir_types);
 }
 
