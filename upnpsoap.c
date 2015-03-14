@@ -828,6 +828,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 		/* We may need special handling for certain MIME types */
 		if( *mime == 'v' )
 		{
+			passed_args->flags &= ~FLAG_HAS_CAPTIONS; // clear the caption flag for each item
 			dlna_flags |= DLNA_FLAG_TM_S;
 			if( passed_args->flags & FLAG_MIME_AVI_DIVX )
 			{
