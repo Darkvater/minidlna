@@ -55,6 +55,7 @@ static const struct {
 	{ UPNPALBUMART_NAMES, "album_art_names"},
 	{ SCANNER_IGNORE, "ignore_paths"},
 	{ UPNPINOTIFY, "inotify" },
+	{ RESCANINTERVAL, "rescan_interval" },
 	{ UPNPDBDIR, "db_dir" },
 	{ UPNPLOGDIR, "log_dir" },
 	{ UPNPLOGLEVEL, "log_level" },

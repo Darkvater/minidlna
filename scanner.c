@@ -43,6 +43,7 @@
 #include "utils.h"
 #include "sql.h"
 #include "scanner.h"
+#include "notify_event.h"
 #include "albumart.h"
 #include "containers.h"
 #include "log.h"
@@ -724,6 +725,30 @@ filter_avp(scan_filter *d)
 	       );
 }
 
+int
+get_directory_entries(struct dirent ***namelist, const char *dir, media_types dir_types)
+{
+	switch( dir_types )
+	{
+	case ALL_MEDIA:
+		return scandir(dir, namelist, filter_avp, alphasort);
+	case TYPE_AUDIO:
+		return scandir(dir, namelist, filter_a, alphasort);
+	case TYPE_AUDIO|TYPE_VIDEO:
+		return scandir(dir, namelist, filter_av, alphasort);
+	case TYPE_AUDIO|TYPE_IMAGES:
+		return scandir(dir, namelist, filter_ap, alphasort);
+	case TYPE_VIDEO:
+		return scandir(dir, namelist, filter_v, alphasort);
+	case TYPE_VIDEO|TYPE_IMAGES:
+		return scandir(dir, namelist, filter_vp, alphasort);
+	case TYPE_IMAGES:
+		return scandir(dir, namelist, filter_p, alphasort);
+	default:
+		return -1;
+	}
+}
+
 static void
 ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 {
@@ -735,33 +760,7 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 	enum file_types type;
 
 	DPRINTF(parent?E_INFO:E_WARN, L_SCANNER, _("Scanning %s\n"), dir);
-	switch( dir_types )
-	{
-		case ALL_MEDIA:
-			n = scandir(dir, &namelist, filter_avp, alphasort);
-			break;
-		case TYPE_AUDIO:
-			n = scandir(dir, &namelist, filter_a, alphasort);
-			break;
-		case TYPE_AUDIO|TYPE_VIDEO:
-			n = scandir(dir, &namelist, filter_av, alphasort);
-			break;
-		case TYPE_AUDIO|TYPE_IMAGES:
-			n = scandir(dir, &namelist, filter_ap, alphasort);
-			break;
-		case TYPE_VIDEO:
-			n = scandir(dir, &namelist, filter_v, alphasort);
-			break;
-		case TYPE_VIDEO|TYPE_IMAGES:
-			n = scandir(dir, &namelist, filter_vp, alphasort);
-			break;
-		case TYPE_IMAGES:
-			n = scandir(dir, &namelist, filter_p, alphasort);
-			break;
-		default:
-			n = -1;
-			break;
-	}
+	n = get_directory_entries(&namelist, dir, dir_types);
 	if( n < 0 )
 	{
 		DPRINTF(E_WARN, L_SCANNER, "Error scanning %s\n", dir);
@@ -786,21 +785,10 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 		if( quitting )
 			break;
 #endif
-		type = TYPE_UNKNOWN;
 		snprintf(full_path, PATH_MAX, "%s/%s", dir, namelist[i]->d_name);
 		name = escape_tag(namelist[i]->d_name, 1);
-		if( is_dir(namelist[i]) == 1 )
-		{
-			type = TYPE_DIR;
-		}
-		else if( is_reg(namelist[i]) == 1 )
-		{
-			type = TYPE_FILE;
-		}
-		else
-		{
-			type = resolve_unknown_type(full_path, dir_types);
-		}
+		type = resolve_file_type(namelist[i], full_path, dir_types);
+
 		if( (type == TYPE_DIR) && (access(full_path, R_OK|X_OK) == 0) )
 		{
 			char *parent_id;
@@ -845,21 +833,33 @@ _notify_stop(void)
 #endif
 }
 
-void
-start_scanner()
+static void
+init_scanner()
 {
-	struct media_dir_s *media_path;
-	char path[MAXPATHLEN];
-
 	if (setpriority(PRIO_PROCESS, 0, 15) == -1)
-		DPRINTF(E_WARN, L_INOTIFY,  "Failed to reduce scanner thread priority\n");
+		DPRINTF(E_WARN, L_SCANNER, "Failed to reduce scanner thread priority\n");
 	_notify_start();
 
 	setlocale(LC_COLLATE, "");
 
 	av_register_all();
 	av_log_set_level(AV_LOG_PANIC);
-	for( media_path = media_dirs; media_path != NULL; media_path = media_path->next )
+}
+
+static void
+deinit_scanner()
+{
+	_notify_stop();
+}
+
+void
+start_scanner()
+{
+	struct media_dir_s *media_path;
+	char path[MAXPATHLEN];
+
+	init_scanner();
+	for ( media_path = media_dirs; media_path != NULL; media_path = media_path->next )
 	{
 		int64_t id;
 		char *bname, *parent = NULL;
@@ -881,22 +881,112 @@ start_scanner()
 		ScanDirectory(media_path->path, parent, media_path->types);
 		sql_exec(db, "INSERT into SETTINGS values (%Q, %Q)", "media_dir", media_path->path);
 	}
-	_notify_stop();
+	deinit_scanner();
 	/* Create this index after scanning, so it doesn't slow down the scanning process.
 	 * This index is very useful for large libraries used with an XBox360 (or any
 	 * client that uses UPnPSearch on large containers). */
 	sql_exec(db, "create INDEX IDX_SEARCH_OPT ON OBJECTS(OBJECT_ID, CLASS, DETAIL_ID);");
 
-	if( GETFLAG(NO_PLAYLIST_MASK) )
-	{
-		DPRINTF(E_WARN, L_SCANNER, "Playlist creation disabled\n");	  
-	}
-	else
-	{
-		fill_playlists();
-	}
+	fill_playlists();
 
 	DPRINTF(E_DEBUG, L_SCANNER, "Initial file scan completed\n");
 	//JM: Set up a db version number, so we know if we need to rebuild due to a new structure.
 	sql_exec(db, "pragma user_version = %d;", DB_VERSION);
+}
+
+static void
+scan_for_removed_files(const char* root_dir)
+{
+	int nrows;
+	char **result;
+	char *sql = sqlite3_mprintf("SELECT PATH, SIZE from DETAILS where PATH > %Q", root_dir);
+
+	if (sql_get_table(db, sql, &result, &nrows, NULL) == SQLITE_OK)
+	{
+		for (; nrows > 0; nrows--)
+		{
+			if (quitting) break;
+
+			struct stat st;
+			char *path = result[2 * nrows];
+			// file doesn't exist anymore or is not accessible, remove
+			if (stat(path, &st) != 0)
+			{
+				int is_directory = atoi(result[2 * nrows + 1]) == 0;
+				if (is_directory)
+					notify_event_remove_directory(path);
+				else
+					notify_event_remove_file(path);
+			}
+		}
+		sqlite3_free_table(result);
+	}
+	sqlite3_free(sql);
+}
+
+static void
+scan_for_added_files(const char *root_dir, media_types dir_types)
+{
+	char path[MAXPATHLEN];
+	struct dirent **namelist;
+	enum file_types type;
+
+	int n = get_directory_entries(&namelist, root_dir, dir_types);
+	if (n < 0)
+	{
+		DPRINTF(E_WARN, L_SCANNER, "Error scanning %s\n", root_dir);
+		return;
+	}
+
+	for (n--; n >= 0; n--)
+	{
+		if (quitting) break;
+
+		struct stat st;
+		char *name = escape_tag(namelist[n]->d_name, 1);
+		snprintf(path, sizeof(path), "%s/%s", root_dir, namelist[n]->d_name);
+		type = resolve_file_type(namelist[n], path, dir_types);
+
+		if (type == TYPE_DIR && access(path, R_OK | X_OK) == 0)
+		{
+			int64_t detailID = sql_get_int64_field(db, "SELECT ID from DETAILS where PATH = %Q", path);
+			if (detailID == 0)
+			{
+				notify_event_insert_directory(name, path, dir_types, NULL);
+			} else
+			{
+				scan_for_added_files(path, dir_types);
+			}
+		}
+		else if (type == TYPE_FILE && lstat(path, &st) == 0)
+		{
+			if (sql_get_int_field(db, "SELECT TIMESTAMP from DETAILS where PATH = %Q", path) != st.st_mtime)
+			{
+				notify_event_insert_file(name, path, dir_types);
+			}
+		}
+		free(name);
+		free(namelist[n]);
+	}
+	free(namelist);
+}
+
+void
+start_rescanner()
+{
+	struct media_dir_s *media_path;
+
+	DPRINTF(E_DEBUG, L_SCANNER, "Rescanning media directores...\n");
+	init_scanner();
+
+	for (media_path = media_dirs; media_path != NULL; media_path = media_path->next)
+	{
+		scan_for_removed_files(media_path->path);
+		scan_for_added_files(media_path->path, media_path->types);
+	}
+	
+	deinit_scanner();
+	fill_playlists();
+
+	DPRINTF(E_DEBUG, L_SCANNER, "Finished rescanning media directories\n");
 }

@@ -275,3 +275,10 @@ db_upgrade(sqlite3 *db)
 
 	return db_vers;
 }
+
+int
+is_sqlite3_threadsafe()
+{
+	return sqlite3_threadsafe() && sqlite3_libversion_number() >= 3005001;
+}
+

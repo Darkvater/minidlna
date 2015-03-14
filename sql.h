@@ -40,5 +40,6 @@ int sql_get_int_field(sqlite3 *db, const char *fmt, ...);
 int64_t sql_get_int64_field(sqlite3 *db, const char *fmt, ...);
 char * sql_get_text_field(sqlite3 *db, const char *fmt, ...);
 int db_upgrade(sqlite3 *db);
+int is_sqlite3_threadsafe();
 
 #endif
