@@ -142,18 +142,13 @@ insert_containers_for_video(const char *name, const char *refID, const char *cla
 {
 	char sql[128];
 	char **result;
-	int cols, row;
+	int nrows;
 	int64_t objectID, parentID;
 
 	snprintf(sql, sizeof(sql), "SELECT ALBUM, DISC, VIDEO_TYPE from DETAILS where ID = %lld", (long long)detailID);
-	int ret = sql_get_table(db, sql, &result, &row, &cols);
-	if (ret != SQLITE_OK)
-		return;
-	if (!row)
-	{
-		sqlite3_free_table(result);
-		return;
-	}
+	if (sql_get_table(db, sql, &result, &nrows, NULL) != SQLITE_OK) return;
+	if (nrows == 0) goto _exit;
+
 	char *series = result[3], *season = result[4];
 	int video_type = atoi(result[5]);
 	char *refID_buf = strdup(refID);
@@ -214,6 +209,8 @@ insert_containers_for_video(const char *name, const char *refID, const char *cla
 
 	free(refID_buf);
 	sqlite3_free(album_art);
+_exit:
+	sqlite3_free_table(result);
 }
 
 static void
