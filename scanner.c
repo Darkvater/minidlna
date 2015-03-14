@@ -976,6 +976,7 @@ start_rescanner()
 {
 	struct media_dir_s *media_path;
 
+	if (scanning) return;
 	DPRINTF(E_DEBUG, L_SCANNER, "Rescanning media directores...\n");
 	init_scanner();
 
