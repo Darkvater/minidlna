@@ -7,7 +7,7 @@ autom4te.cache/
 bin/
 compile
 config.guess
-config.h.in
+config.h.in*
 config.rpath
 config.sub
 config.status

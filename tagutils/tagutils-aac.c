@@ -107,7 +107,7 @@ _get_aactags(char *file, struct song_metadata *psong)
 			if(fread(current_data, 1, current_size - 8, fin) != current_size - 8)
 				break;
 
-			current_data[len-1] = '\0';
+			current_data[current_size - 8] = '\0';
 			if(!memcmp(current_atom, "\xA9" "nam", 4))
 				psong->title = strdup((char*)&current_data[16]);
 			else if(!memcmp(current_atom, "\xA9" "ART", 4) ||
@@ -117,6 +117,9 @@ _get_aactags(char *file, struct song_metadata *psong)
 				psong->album = strdup((char*)&current_data[16]);
 			else if(!memcmp(current_atom, "\xA9" "cmt", 4))
 				psong->comment = strdup((char*)&current_data[16]);
+			else if(!memcmp(current_atom, "aART", 4) ||
+				!memcmp(current_atom, "aart", 4))
+				psong->contributor[ROLE_ALBUMARTIST] = strdup((char*)&current_data[16]);
 			else if(!memcmp(current_atom, "\xA9" "dir", 4))
 				psong->contributor[ROLE_CONDUCTOR] = strdup((char*)&current_data[16]);
 			else if(!memcmp(current_atom, "\xA9" "wrt", 4))
