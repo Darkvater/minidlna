@@ -325,21 +325,20 @@ int
 link_file(const char *src_file, const char *dst_file)
 {
 	if (link(src_file, dst_file) == 0)
-	{
 		return 0;
-	}
-	else
+
+	if (errno == ENOENT)
 	{
-		if (errno == ENOENT)
-		{
-			char *dir = strdup(dst_file);
-			make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-			free(dir);
-			if (link(src_file, dst_file) == 0)
-				return 0;
-		}
-		DPRINTF(E_WARN, L_GENERAL, "Linking %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
+		char *dir = strdup(dst_file);
+		make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+		free(dir);
+		if (link(src_file, dst_file) == 0)
+			return 0;
+		/* try a softlink if all else fails */
+		if (symlink(src_file, dst_file) == 0)
+			return 0;
 	}
+	DPRINTF(E_INFO, L_GENERAL, "Linking %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
 	return -1;
 }
 

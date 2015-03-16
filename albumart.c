@@ -227,7 +227,7 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 		return NULL;
 	}
 	/* If the embedded image matches the embedded image from the last file we
-	 * checked, just make a hard link.  Better than storing it on the disk twice. */
+	 * checked, just make a link. Better than storing it on the disk twice. */
 	hash = DJBHash(image_data, image_size);
 	if( hash == last_hash )
 	{
