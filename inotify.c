@@ -161,7 +161,7 @@ inotify_create_watches(int fd)
 	FILE * max_watches;
 	unsigned int num_watches = 0, watch_limit;
 	char **result;
-	int i, rows = 0;
+	int rows = 0;
 	struct media_dir_s * media_path;
 
 	for( media_path = media_dirs; media_path != NULL; media_path = media_path->next )
@@ -174,7 +174,7 @@ inotify_create_watches(int fd)
 	{
 		for (; rows > 0; rows--)
 		{
-			add_watch(fd, result[i]);
+			add_watch(fd, result[rows]);
 			num_watches++;
 		}
 		sqlite3_free_table(result);
