@@ -445,6 +445,7 @@ image_new_from_jpeg(const char *path, int is_file, const uint8_t *buf, int size,
 	}
 	if( setjmp(setjmp_buffer) )
 	{
+		DPRINTF(E_ERROR, L_METADATA, "jpeg handling failed on %s\n", path);
 		jpeg_destroy_decompress(&cinfo);
 		if( is_file && file )
 			fclose(file);

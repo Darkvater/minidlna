@@ -328,7 +328,7 @@ check_dir:
 		if (access(file, R_OK) == 0)
 add_cached_image:
 		{
-			char *cache_file;
+			char *cache_file, *thumb;
 
 			DPRINTF(E_DEBUG, L_ARTWORK, "Found album art in %s\n", file);
 			if (art_cache_exists(file, &cache_file))
@@ -338,7 +338,9 @@ add_cached_image:
 			/* add a thumbnail version anticipiating a bit for the most likely access.
 			* The webservice will generate other thumbs on the fly if not available */
 			image_s *imsrc = image_new_from_jpeg(file, 1, NULL, 0, 1, ROTATE_NONE);
-			char *thumb = save_resized_album_art_from_imsrc(imsrc, file, get_image_size_type(JPEG_TN));
+			if (!imsrc) break;
+
+			thumb = save_resized_album_art_from_imsrc(imsrc, file, get_image_size_type(JPEG_TN));
 			image_free(imsrc);
 			free(thumb);
 			return ret == 0 ? cache_file : NULL;
