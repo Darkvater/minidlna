@@ -561,6 +561,9 @@ CreateDatabase(void)
 	ret = sql_exec(db, create_captionTable_sqlite);
 	if( ret != SQLITE_OK )
 		goto sql_failed;
+	ret = sql_exec(db, create_metadataTable_sqlite);
+	if( ret != SQLITE_OK )
+		goto sql_failed;
 	ret = sql_exec(db, create_bookmarkTable_sqlite);
 	if( ret != SQLITE_OK )
 		goto sql_failed;
@@ -633,7 +636,7 @@ filter_hidden(scan_filter *d)
 	return (d->d_name[0] != '.');
 }
 
-static int
+static inline int
 filter_type(scan_filter *d)
 {
 #if HAVE_STRUCT_DIRENT_D_TYPE
@@ -646,83 +649,58 @@ filter_type(scan_filter *d)
 #endif
 }
 
+static inline int
+base_filter(scan_filter *d, int filter_response)
+{
+	return filter_hidden(d) && filter_ignored(d) && (filter_type(d) || (is_reg(d) && filter_response));
+}
+
 static int
 filter_a(scan_filter *d)
 {
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-		   (is_audio(d->d_name) ||
-	            is_playlist(d->d_name))))
-	       );
-}
-
-static int
-filter_av(scan_filter *d)
-{
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-		   (is_audio(d->d_name) ||
-		    is_video(d->d_name) ||
-	            is_playlist(d->d_name))))
-	       );
-}
-
-static int
-filter_ap(scan_filter *d)
-{
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-		   (is_audio(d->d_name) ||
-		    is_image(d->d_name) ||
-	            is_playlist(d->d_name))))
-	       );
+	return base_filter(d, is_audio(d->d_name) || is_playlist(d->d_name));
 }
 
 static int
 filter_v(scan_filter *d)
 {
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-	           is_video(d->d_name)))
-	       );
-}
-
-static int
-filter_vp(scan_filter *d)
-{
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-		   (is_video(d->d_name) ||
-	            is_image(d->d_name))))
-	       );
+	return base_filter(d, is_video(d->d_name));
 }
 
 static int
 filter_p(scan_filter *d)
 {
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-		   is_image(d->d_name)))
-	       );
+	return base_filter(d, is_image(d->d_name));
+}
+
+static int
+filter_av(scan_filter *d)
+{
+	return base_filter(d, is_audio(d->d_name) || is_playlist(d->d_name) || is_video(d->d_name));
+}
+
+static int
+filter_ap(scan_filter *d)
+{
+	return base_filter(d, is_audio(d->d_name) || is_playlist(d->d_name) || is_image(d->d_name));
+}
+
+static int
+filter_vp(scan_filter *d)
+{
+	return base_filter(d, is_video(d->d_name) || is_image(d->d_name));
 }
 
 static int
 filter_avp(scan_filter *d)
 {
-	return (filter_hidden(d) && filter_ignored(d) &&
-	         (filter_type(d) ||
-		  (is_reg(d) &&
-		   (is_audio(d->d_name) ||
-		    is_image(d->d_name) ||
-		    is_video(d->d_name) ||
-	            is_playlist(d->d_name))))
-	       );
+	return base_filter(d, is_audio(d->d_name) || is_playlist(d->d_name) || is_video(d->d_name) || is_image(d->d_name));
+}
+
+static int
+filter(scan_filter *d)
+{
+	return base_filter(d, is_audio(d->d_name) || is_playlist(d->d_name) || is_video(d->d_name) || is_image(d->d_name) || is_caption(d->d_name) || is_metadata(d->d_name));
 }
 
 int
@@ -744,6 +722,8 @@ get_directory_entries(struct dirent ***namelist, const char *dir, media_types di
 		return scandir(dir, namelist, filter_vp, alphasort);
 	case TYPE_IMAGES:
 		return scandir(dir, namelist, filter_p, alphasort);
+	case TYPE_RESCAN:
+		return scandir(dir, namelist, filter, alphasort);
 	default:
 		return -1;
 	}
@@ -831,6 +811,17 @@ _notify_stop(void)
 		system("/bin/sh /ramfs/.rescan_done");
 	unlink("/ramfs/.upnp-av_scan");
 #endif
+}
+
+static const char *
+get_table_for_timestamp_check(const char *name, const char *path)
+{
+	if (is_playlist(path)) return "PLAYLISTS";
+	if (is_album_art(name)) return "ALBUM_ART";
+	if (is_caption(name)) return "CAPTIONS";
+	if (is_metadata(path)) return "METADATA";
+
+	return "DETAILS";
 }
 
 static void
@@ -931,7 +922,7 @@ scan_for_added_files(const char *root_dir, media_types dir_types)
 	struct dirent **namelist;
 	enum file_types type;
 
-	int n = get_directory_entries(&namelist, root_dir, dir_types);
+	int n = get_directory_entries(&namelist, root_dir, TYPE_RESCAN);
 	if (n < 0)
 	{
 		DPRINTF(E_WARN, L_SCANNER, "Error scanning %s\n", root_dir);
@@ -945,7 +936,7 @@ scan_for_added_files(const char *root_dir, media_types dir_types)
 		struct stat st;
 		char *name = escape_tag(namelist[n]->d_name, 1);
 		snprintf(path, sizeof(path), "%s/%s", root_dir, namelist[n]->d_name);
-		type = resolve_file_type(namelist[n], path, dir_types);
+		type = resolve_file_type(namelist[n], path, dir_types | TYPE_RESCAN);
 
 		if (type == TYPE_DIR && access(path, R_OK | X_OK) == 0)
 		{
@@ -960,7 +951,8 @@ scan_for_added_files(const char *root_dir, media_types dir_types)
 		}
 		else if (type == TYPE_FILE && lstat(path, &st) == 0)
 		{
-			if (sql_get_int_field(db, "SELECT TIMESTAMP from DETAILS where PATH = %Q", path) != st.st_mtime)
+			const char *timestamp_table = get_table_for_timestamp_check(name, path);
+			if (sql_get_int_field(db, "SELECT TIMESTAMP from %s where PATH = %Q", timestamp_table, path) != st.st_mtime)
 			{
 				notify_event_insert_file(name, path, dir_types);
 			}

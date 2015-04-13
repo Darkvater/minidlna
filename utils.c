@@ -499,48 +499,10 @@ resolve_unknown_type(const char * path, media_types dir_type)
 		}
 		else if( S_ISREG(entry.st_mode) )
 		{
-			switch( dir_type )
-			{
-				case ALL_MEDIA:
-					if( is_image(path) ||
-					    is_audio(path) ||
-					    is_video(path) ||
-					    is_playlist(path) )
-						type = TYPE_FILE;
-					break;
-				case TYPE_AUDIO:
-					if( is_audio(path) ||
-					    is_playlist(path) )
-						type = TYPE_FILE;
-					break;
-				case TYPE_AUDIO | TYPE_VIDEO:
-					if( is_audio(path) ||
-					    is_video(path) ||
-					    is_playlist(path))
-						type = TYPE_FILE;
-						break;
-				case TYPE_AUDIO | TYPE_IMAGES:
-					if( is_image(path) ||
-					    is_audio(path) ||
-					    is_playlist(path) )
-						type = TYPE_FILE;
-					break;
-				case TYPE_VIDEO:
-					if( is_video(path) )
-						type = TYPE_FILE;
-					break;
-				case TYPE_VIDEO | TYPE_IMAGES:
-					if( is_image(path) ||
-					    is_video(path) )
-						type = TYPE_FILE;
-					break;
-				case TYPE_IMAGES:
-					if( is_image(path) )
-						type = TYPE_FILE;
-					break;
-				default:
-					break;
-			}
+			if ((dir_type & TYPE_AUDIO) && (is_audio(path) || is_playlist(path))) type = TYPE_FILE;
+			if ((dir_type & TYPE_VIDEO) && is_video(path)) type = TYPE_FILE;
+			if ((dir_type & TYPE_IMAGES) && is_image(path)) type = TYPE_FILE;
+			if ((dir_type & TYPE_RESCAN) && (is_caption(path) || is_metadata(path) || is_image(path))) type = TYPE_FILE;
 		}
 	}
 	return type;

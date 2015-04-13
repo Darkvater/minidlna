@@ -166,10 +166,18 @@ check_for_captions(const char *path, int64_t detailID)
 
 	if (ret == 0)
 	{
-		sql_exec(db, "INSERT into CAPTIONS"
-		             " (ID, PATH) "
-		             "VALUES"
-		             " (%lld, %Q)", detailID, file);
+		struct stat st;
+		if (lstat(file, &st) != 0) return;
+
+		int64_t ret = sql_get_int64_field(db, "SELECT ID from CAPTIONS where PATH = %Q", file);
+		if (ret == 0)
+		{
+			sql_exec(db, "INSERT into CAPTIONS (ID, PATH, TIMESTAMP) VALUES (%lld, %Q, %d)", detailID, file, st.st_mtime);
+		}
+		else
+		{
+			sql_exec(db, "UPDATE CAPTIONS set TIMESTAMP = %d where ID = %lld", st.st_mtime, detailID);
+		}
 	}
 }
 
@@ -372,6 +380,7 @@ static void
 parse_nfo(const char *path, metadata_t *m)
 {
 	char *root_element;
+	struct stat st;
 	struct NameValueParserData xml;
 	if (read_nfo_data_from_xml(path, &xml) != 0) return;
 
@@ -386,6 +395,19 @@ parse_nfo(const char *path, metadata_t *m)
 	set_value_from_xml_if_exists(&m->date, &xml, "mime");
 
 	ClearNameValueList(&xml);
+
+	if (lstat(path, &st) == 0)
+	{
+		int64_t ret = sql_get_int64_field(db, "SELECT ID from METADATA where PATH = %Q", path);
+		if (ret == 0)
+		{
+			sql_exec(db, "INSERT into METADATA (PATH, TIMESTAMP) VALUES (%Q, %d)", path, st.st_mtime);
+		}
+		else
+		{
+			sql_exec(db, "UPDATE METADATA set TIMESTAMP = %d where ID = %lld", st.st_mtime, ret);
+		}
+	}
 }
 
 void

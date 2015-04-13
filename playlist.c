@@ -61,6 +61,10 @@ insert_playlist(const char * path, char * name)
 		DPRINTF(E_WARN, L_SCANNER, "Bad playlist [%s]\n", path);
 		return -1;
 	}
+	if (lstat(path, &file) != 0)
+	{
+		return -1;
+	}
 	strip_ext(name);
 
 	DPRINTF(E_DEBUG, L_SCANNER, "Playlist %s contains %d items\n", name, items);
@@ -69,18 +73,18 @@ insert_playlist(const char * path, char * name)
 	if( matches > 0 )
 	{
 		sql_exec(db, "INSERT into PLAYLISTS"
-		             " (NAME, PATH, ITEMS) "
-	        	     "VALUES"
-		             " ('%q(%d)', '%q', %d)",
-		             name, matches, path, items);
+		             " (NAME, PATH, TIMESTAMP, ITEMS) "
+		             "VALUES"
+		             " ('%q(%d)', %Q, %d, %d)",
+		             name, matches, path, file.st_mtime, items);
 	}
 	else
 	{
 		sql_exec(db, "INSERT into PLAYLISTS"
-		             " (NAME, PATH, ITEMS) "
-	        	     "VALUES"
-		             " ('%q', '%q', %d)",
-		             name, path, items);
+		             " (NAME, PATH, TIMESTAMP, ITEMS) "
+		             "VALUES"
+		             " (%Q, %Q, %d, %d)",
+		             name, path, file.st_mtime, items);
 	}
 	return 0;
 }
