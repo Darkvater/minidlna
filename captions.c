@@ -23,6 +23,7 @@
 #include <libgen.h>
 #include <string.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <dirent.h>
 
 #include "upnpglobalvars.h"
@@ -31,16 +32,27 @@
 #include "sql.h"
 #include "log.h"
 
+
 static void
 add_caption(int64_t detailID, const char *path, const char *language)
 {
-	if (detailID && access(path, R_OK) == 0)
+	struct stat st;
+	if (detailID && access(path, R_OK) == 0 && lstat(path, &st) == 0)
 	{
 		DPRINTF(E_DEBUG, L_METADATA, "Adding caption file: %s\n", path);
-		sql_exec(db, "INSERT into CAPTIONS"
-			" (MEDIA_ID, PATH, LANGUAGE, DEFAULT_ITEM) "
-			"VALUES"
-			" (%lld, %Q, %Q, %d)", detailID, path, language, language == NULL ? 1 : 0);
+
+		int64_t ret = sql_get_int64_field(db, "SELECT ID from CAPTIONS where PATH = %Q", path);
+		if (ret == 0)
+		{
+			sql_exec(db, "INSERT into CAPTIONS"
+			             "(MEDIA_ID, PATH, LANGUAGE, DEFAULT_ITEM, TIMESTAMP) "
+			             "VALUES (%lld, %Q, %Q, %d, %d)",
+			             detailID, path, language, language == NULL ? 1 : 0, st.st_mtime);
+		}
+		else
+		{
+			sql_exec(db, "UPDATE CAPTIONS set TIMESTAMP = %d where ID = %lld", st.st_mtime, detailID);
+		}
 	}
 }
 

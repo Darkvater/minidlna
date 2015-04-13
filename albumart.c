@@ -340,15 +340,15 @@ add_cached_image:
 int64_t
 find_album_art(const char *path, uint8_t *image_data, int image_size)
 {
-	
+	struct stat st;
 	char *album_art = check_embedded_art(path, image_data, image_size);
 	if (album_art == NULL) album_art = check_for_album_file(path);
-	if (album_art == NULL) return 0;
+	if (album_art == NULL || lstat(album_art, &st) != 0) return 0;
 
-	int64_t ret = sql_get_int_field(db, "SELECT ID from ALBUM_ART where PATH = '%q'", album_art);
+	int64_t ret = sql_get_int64_field(db, "SELECT ID from ALBUM_ART where PATH = %Q", album_art);
 	if (ret == 0)
 	{
-		if (sql_exec(db, "INSERT into ALBUM_ART (PATH) VALUES ('%q')", album_art) == SQLITE_OK)
+		if (sql_exec(db, "INSERT into ALBUM_ART (PATH, TIMESTAMP) VALUES (%Q, %d)", album_art, st.st_mtime) == SQLITE_OK)
 		{
 			ret = sqlite3_last_insert_rowid(db);
 		}
@@ -357,6 +357,9 @@ find_album_art(const char *path, uint8_t *image_data, int image_size)
 			DPRINTF(E_WARN, L_METADATA, "Error setting %s as cover art for %s\n", album_art, path);
 			ret = 0;
 		}
+	} else
+	{
+		sql_exec(db, "UPDATE ALBUM_ART set TIMESTAMP = %d where ID = %lld", st.st_mtime, ret);
 	}
 	
 	free(album_art);

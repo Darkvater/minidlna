@@ -949,7 +949,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 			ret = append_multiple_from_commaseparated_string(str, author, "upnp:author");
 		}
 		if( date && (passed_args->filter & FILTER_DC_DATE) ) {
-			ret = strcatf(str, "&lt;dc:date&gt;%s&lt;/dc:date&gt;", date);
+			ret = append(str, date, "dc:date");
 		}
 		if (rating && (passed_args->filter & FILTER_UPNP_RATING)) {
 			ret = append(str, rating, "upnp:rating");

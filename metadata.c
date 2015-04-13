@@ -271,6 +271,7 @@ parse_movie_nfo(struct NameValueParserData *xml, metadata_t *m)
 
 	set_value_from_xml_if_exists(&m->title, xml, "title");
 	set_value_from_xml_if_exists(&m->date, xml, "year");
+	set_value_from_xml_if_exists(&m->date, xml, "premiered");
 	set_value_from_xml_if_exists(&m->comment, xml, "tagline");
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
@@ -335,6 +336,7 @@ static void
 parse_nfo(const char *path, metadata_t *m)
 {
 	char *root_element;
+	struct stat st;
 	struct NameValueParserData xml;
 	if (read_nfo_data_from_xml(path, &xml) != 0) return;
 
@@ -349,6 +351,19 @@ parse_nfo(const char *path, metadata_t *m)
 	set_value_from_xml_if_exists(&m->date, &xml, "mime");
 
 	ClearNameValueList(&xml);
+
+	if (lstat(path, &st) == 0)
+	{
+		int64_t ret = sql_get_int64_field(db, "SELECT ID from METADATA where PATH = %Q", path);
+		if (ret == 0)
+		{
+			sql_exec(db, "INSERT into METADATA (PATH, TIMESTAMP) VALUES (%Q, %d)", path, st.st_mtime);
+		}
+		else
+		{
+			sql_exec(db, "UPDATE METADATA set TIMESTAMP = %d where ID = %lld", st.st_mtime, ret);
+		}
+	}
 }
 
 void

@@ -61,17 +61,25 @@ char create_detailTable_sqlite[] = "CREATE TABLE DETAILS ("
                                         "MIME TEXT);";
 
 char create_albumArtTable_sqlite[] = "CREATE TABLE ALBUM_ART ("
-					"ID INTEGER PRIMARY KEY AUTOINCREMENT, "
-					"PATH TEXT NOT NULL"
-                                        ");";
+                    "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "PATH TEXT NOT NULL, "
+                    "TIMESTAMP INTEGER"
+                    ");";
 
 char create_captionTable_sqlite[] = "CREATE TABLE CAPTIONS ("
 					"ID INTEGER PRIMARY KEY AUTOINCREMENT, "
 					"MEDIA_ID INTEGER, "
 					"PATH TEXT NOT NULL, "
+					"TIMESTAMP INTEGER, "
 					"LANGUAGE TEXT, "
 					"DEFAULT_ITEM BOOL NOT NULL"
 					");";
+
+char create_metadataTable_sqlite[] = "CREATE TABLE METADATA ("
+                    "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "PATH TEXT NOT NULL, "
+                    "TIMESTAMP INTEGER"
+                    ");";
 
 char create_bookmarkTable_sqlite[] = "CREATE TABLE BOOKMARKS ("
 					"ID INTEGER PRIMARY KEY, "
@@ -79,12 +87,13 @@ char create_bookmarkTable_sqlite[] = "CREATE TABLE BOOKMARKS ("
 					");";
 
 char create_playlistTable_sqlite[] = "CREATE TABLE PLAYLISTS ("
-					"ID INTEGER PRIMARY KEY AUTOINCREMENT, "
-					"NAME TEXT NOT NULL, "
-					"PATH TEXT NOT NULL, "
-					"ITEMS INTEGER DEFAULT 0, "
-					"FOUND INTEGER DEFAULT 0"
-					");";
+                    "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "NAME TEXT NOT NULL, "
+                    "PATH TEXT NOT NULL, "
+                    "TIMESTAMP INTEGER, "
+                    "ITEMS INTEGER DEFAULT 0, "
+                    "FOUND INTEGER DEFAULT 0"
+                    ");";
 
 char create_settingsTable_sqlite[] = "CREATE TABLE SETTINGS ("
 					"KEY TEXT NOT NULL, "
