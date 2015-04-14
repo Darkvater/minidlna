@@ -969,7 +969,7 @@ start_rescanner()
 	struct media_dir_s *media_path;
 
 	if (scanning) return;
-	DPRINTF(E_DEBUG, L_SCANNER, "Rescanning media directores...\n");
+	DPRINTF(E_INFO, L_SCANNER, "Rescanning media directores...\n");
 	init_scanner();
 
 	for (media_path = media_dirs; media_path != NULL; media_path = media_path->next)
@@ -981,5 +981,5 @@ start_rescanner()
 	deinit_scanner();
 	fill_playlists();
 
-	DPRINTF(E_DEBUG, L_SCANNER, "Finished rescanning media directories\n");
+	DPRINTF(E_INFO, L_SCANNER, "Finished rescanning media directories\n");
 }

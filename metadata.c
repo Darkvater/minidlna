@@ -297,7 +297,7 @@ read_nfo_data_from_xml(const char *path, struct NameValueParserData *xml)
 		return 1;
 	}
 
-	DPRINTF(E_DEBUG, L_METADATA, "Parsing .nfo file: %s\n", path);
+	DPRINTF(E_MAXDEBUG, L_METADATA, "Parsing candidate .nfo file: %s\n", path);
 	{
 		size_t nread;
 		FILE *nfo = fopen(path, "r");
@@ -387,7 +387,7 @@ parse_nfo(const char *path, metadata_t *m)
 	root_element = GetValueFromNameValueList(&xml, "rootElement");
 	if (root_element == NULL) return;
 
-	DPRINTF(E_MAXDEBUG, L_METADATA, ".nfo type: %s\n", root_element);
+	DPRINTF(E_DEBUG, L_METADATA, ".nfo type: %s [%s]\n", root_element, path);
 	parse_movie_nfo(&xml, m);
 	parse_tvshow_nfo(&xml, m);
 	parse_tvepisode_nfo(&xml, m);

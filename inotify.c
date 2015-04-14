@@ -126,7 +126,7 @@ add_watch(int fd, const char *path)
 	}
 	lastwatch = nw;
 
-	DPRINTF(E_INFO, L_INOTIFY, "Added watch to %s [%d]\n", path, wd);
+	DPRINTF(E_DEBUG, L_INOTIFY, "Added watch to %s [%d]\n", path, wd);
 	return wd;
 }
 
