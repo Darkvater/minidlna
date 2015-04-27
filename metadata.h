@@ -96,9 +96,6 @@ int
 ends_with(const char *haystack, const char *needle);
 
 void
-check_for_captions(const char *path, int64_t detailID);
-
-void
 check_for_metadata(const char *path);
 
 int64_t

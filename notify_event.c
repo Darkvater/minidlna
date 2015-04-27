@@ -253,7 +253,7 @@ notify_event_remove_file(const char *path)
 
 		/* Delete the parent containers if we are about to empty them. */
 		snprintf(sql, sizeof(sql), "SELECT PARENT_ID from OBJECTS where DETAIL_ID = %lld"
-			" and PARENT_ID not like '64$%%'",
+			" and PARENT_ID not like '"BROWSEDIR_ID"$%%'",
 			(long long int)detailID);
 		if (sql_get_table(db, sql, &result, &nrows, NULL) == SQLITE_OK)
 		{

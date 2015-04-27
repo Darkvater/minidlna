@@ -44,6 +44,7 @@
 #include "utils.h"
 #include "sql.h"
 #include "log.h"
+#include "scanner.h"
 
 #define FLAG_TITLE	0x00000001
 #define FLAG_ARTIST	0x00000002
@@ -455,14 +456,21 @@ update_entry_in_details(const char *path, metadata_t *m, int64_t detailID)
 	int ret = sql_exec(db, "UPDATE DETAILS set"
 		" DATE=%Q, CHANNELS=%u, BITRATE=%u, SAMPLERATE=%u, RESOLUTION=%Q,"
 		" TITLE=%Q, CREATOR=%Q, AUTHOR=%Q, ARTIST=%Q, GENRE=%Q, COMMENT=%Q, DESCRIPTION=%Q, RATING=%Q,"
-		" ALBUM=%Q, TRACK=%u, DISC=%u, DLNA_PN=%Q, MIME=%Q where ID=%lld",
+		" ALBUM=%Q, TRACK=%u, DISC=%u, DLNA_PN=%Q, MIME=%Q, VIDEO_TYPE=%u where ID=%lld",
 		m->date, m->channels, m->bitrate, m->frequency, m->resolution,
 		m->title, m->creator, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
-		m->album, m->track, m->disc, m->dlna_pn, m->mime, detailID);
+		m->album, m->track, m->disc, m->dlna_pn, m->mime, m->videotype, detailID);
 
 	if (ret != SQLITE_OK)
 	{
 		DPRINTF(E_ERROR, L_METADATA, "Error updating details for '%s'!\n", path);
+	}
+
+	char* ref_id = sql_get_text_field(db, "SELECT OBJECT_ID from OBJECTS where DETAIL_ID = %lld and OBJECT_ID like '"BROWSEDIR_ID"$%%'", detailID);
+	if (ref_id != NULL)
+	{
+		insert_containers_for_video(m->title, ref_id, "item.videoItem", detailID);
+		sqlite3_free(ref_id);
 	}
 	return detailID;
 }

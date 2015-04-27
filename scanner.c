@@ -48,11 +48,6 @@
 #include "containers.h"
 #include "log.h"
 
-#if SCANDIR_CONST
-typedef const struct dirent scan_filter;
-#else
-typedef struct dirent scan_filter;
-#endif
 #ifndef AV_LOG_PANIC
 #define AV_LOG_PANIC AV_LOG_FATAL
 #endif
@@ -137,7 +132,7 @@ insert_container(const char *item, const char *rootParent, const char *refID, co
 	return ret;
 }
 
-static void
+void
 insert_containers_for_video(const char *name, const char *refID, const char *class, int64_t detailID)
 {
 	char sql[128];
@@ -196,15 +191,19 @@ insert_containers_for_video(const char *name, const char *refID, const char *cla
 	}
 	if (video_type == MOVIE)
 	{
-		if (!last_movie_objectID)
+		int ret = sql_get_int64_field(db, "SELECT ID from OBJECTS WHERE DETAIL_ID = %lld and OBJECT_ID like '"VIDEO_MOVIES_ID"$'", (long long)detailID);
+		if (ret == 0)
 		{
-			last_movie_objectID = get_next_available_id("OBJECTS", VIDEO_MOVIES_ID);
+			if (!last_movie_objectID)
+			{
+				last_movie_objectID = get_next_available_id("OBJECTS", VIDEO_MOVIES_ID);
+			}
+			sql_exec(db, "INSERT into OBJECTS"
+				" (OBJECT_ID, PARENT_ID, REF_ID, CLASS, DETAIL_ID, NAME) "
+				"VALUES"
+				" ('"VIDEO_MOVIES_ID"$%llX', '"VIDEO_MOVIES_ID"', '%s', '%s', %lld, %Q)",
+				last_movie_objectID++, refID, class, (long long)detailID, name);
 		}
-		sql_exec(db, "INSERT into OBJECTS"
-			" (OBJECT_ID, PARENT_ID, REF_ID, CLASS, DETAIL_ID, NAME) "
-			"VALUES"
-			" ('"VIDEO_MOVIES_ID"$%llX', '"VIDEO_MOVIES_ID"', '%s', '%s', %lld, %Q)",
-			last_movie_objectID++, refID, class, (long long)detailID, name);
 	}
 
 	free(refID_buf);
