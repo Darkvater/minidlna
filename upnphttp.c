@@ -1402,9 +1402,10 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 	}
 
 	long long id = strtoll(url, NULL, 10);
+	const char *suffix = strchr(url, '-');
 
 	path = sql_get_text_field(db, "SELECT PATH from ALBUM_ART where ID  = '%lld'", id);
-	if( !path )
+	if( !path || !suffix)
 	{
 		DPRINTF(E_WARN, L_HTTP, "ALBUM_ART ID %s not found, responding ERROR 404\n", url);
 		Send404(h);
@@ -1415,7 +1416,7 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 	pid_t newpid = -1;
 #endif /* USE_FORK */
 
-	long long size_type = strtoll(strchr(url, '-') + 1, NULL, 10);
+	long long size_type = strtoll(suffix + 1, NULL, 10);
 	const image_size_type_t *image_size_type = get_image_size_type((image_size_type_enum)size_type);
 	albumart_path = get_path_from_image_size_type(path, image_size_type);
 
