@@ -351,6 +351,11 @@ parse_nfo(const char *path, metadata_t *m)
 
 	set_value_from_xml_if_exists(&m->date, &xml, "mime");
 
+	if (m->videotype == 0)
+	{
+		DPRINTF(E_WARN, L_METADATA, "Not a valid .nfo file of type %s: %s\n", root_element, path);
+	}
+
 	ClearNameValueList(&xml);
 
 	if (lstat(path, &st) == 0)
