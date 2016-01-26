@@ -259,7 +259,7 @@ read_nfo_data_from_xml(const char *path, struct NameValueParserData *xml)
 		if (!nfo) return 1;
 
 		nread = fread(buf, 1, max_buf_size, nfo);
-		ParseNameValue(buf, nread, xml, 0);
+		ParseNameValue(buf, nread, xml);
 		fclose(nfo);
 	}
 	return 0;

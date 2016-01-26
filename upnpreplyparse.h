@@ -52,7 +52,7 @@ struct NameValueParserData {
 /* ParseNameValue() */
 void
 ParseNameValue(const char * buffer, int bufsize,
-               struct NameValueParserData * data, uint32_t flags);
+			   struct NameValueParserData * data);
 
 /* ClearNameValueList() */
 void

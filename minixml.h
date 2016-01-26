@@ -1,10 +1,12 @@
+/* $Id: minixml.h,v 1.7 2012/09/27 15:42:10 nanard Exp $ */
 /* minimal xml parser
+ * MiniDLNA media server
+ * This file is part of MiniDLNA.
  *
- * Project : miniupnp
- * Website : http://miniupnp.free.fr/
- * Author : Thomas Bernard
+ * The code herein is based on the MiniUPnP Project.
+ * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
  *
- * Copyright (c) 2005, Thomas Bernard
+ * Copyright (c) 2006-2012, Thomas BERNARD
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,32 +31,29 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __MINIXML_H__
-#define __MINIXML_H__
-#include <stdint.h>
+#ifndef MINIXML_H_INCLUDED
+#define MINIXML_H_INCLUDED
 #define IS_WHITE_SPACE(c) ((c==' ') || (c=='\t') || (c=='\r') || (c=='\n'))
 
 /* if a callback function pointer is set to NULL,
- * the function is not called */
+* the function is not called */
 struct xmlparser {
 	const char *xmlstart;
 	const char *xmlend;
 	const char *xml;	/* pointer to current character */
 	int xmlsize;
-	uint32_t flags;
 	void * data;
-	void (*starteltfunc) (void *, const char *, int);
-	void (*endeltfunc) (void *, const char *, int);
-	void (*datafunc) (void *, const char *, int);
-	void (*attfunc) (void *, const char *, int, const char *, int);
+	void(*starteltfunc) (void *, const char *, int);
+	void(*endeltfunc) (void *, const char *, int);
+	void(*datafunc) (void *, const char *, int);
+	void(*attfunc) (void *, const char *, int, const char *, int);
 };
 
 /* parsexml()
- * the xmlparser structure must be initialized before the call
- * the following structure members have to be initialized :
- * xmlstart, xmlsize, data, *func
- * xml is for internal usage, xmlend is computed automatically */
+* the xmlparser structure must be initialized before the call
+* the following structure members have to be initialized :
+* xmlstart, xmlsize, data, *func
+* xml is for internal usage, xmlend is computed automatically */
 void parsexml(struct xmlparser *);
 
 #endif
-

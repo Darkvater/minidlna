@@ -368,7 +368,7 @@ image_get_jpeg_date_xmp(const char * path, char ** date)
 			if( nread < 1 )
 				break;
 
-			ParseNameValue(data, offset, &xml, 0);
+			ParseNameValue(data, offset, &xml);
 			exif = GetValueFromNameValueList(&xml, "DateTimeOriginal");
 			if( !exif )
 			{

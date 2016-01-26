@@ -146,7 +146,7 @@ IsAuthorizedValidated(struct upnphttp * h, const char * action)
 	struct NameValueParserData data;
 	const char * id;
 
-	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, XML_STORE_EMPTY_FL);
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
 	id = GetValueFromNameValueList(&data, "DeviceID");
 	if(id)
 	{
@@ -296,7 +296,7 @@ GetCurrentConnectionInfo(struct upnphttp * h, const char * action)
 	int id;
 	char *endptr = NULL;
 
-	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, XML_STORE_EMPTY_FL);
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
 	id_str = GetValueFromNameValueList(&data, "ConnectionID");
 	DPRINTF(E_INFO, L_HTTP, "GetCurrentConnectionInfo(%s)\n", id_str);
 	if(id_str)
@@ -1230,7 +1230,7 @@ BrowseContentDirectory(struct upnphttp * h, const char * action)
 	memset(&args, 0, sizeof(args));
 	memset(&str, 0, sizeof(str));
 
-	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, 0);
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
 
 	ObjectID = GetValueFromNameValueList(&data, "ObjectID");
 	Filter = GetValueFromNameValueList(&data, "Filter");
@@ -1712,7 +1712,7 @@ SearchContentDirectory(struct upnphttp * h, const char * action)
 	memset(&args, 0, sizeof(args));
 	memset(&str, 0, sizeof(str));
 
-	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, 0);
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
 
 	ContainerID = GetValueFromNameValueList(&data, "ContainerID");
 	Filter = GetValueFromNameValueList(&data, "Filter");
@@ -1865,7 +1865,7 @@ QueryStateVariable(struct upnphttp * h, const char * action)
 	struct NameValueParserData data;
 	const char * var_name;
 
-	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, 0);
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
 	/*var_name = GetValueFromNameValueList(&data, "QueryStateVariable"); */
 	/*var_name = GetValueFromNameValueListIgnoreNS(&data, "varName");*/
 	var_name = GetValueFromNameValueList(&data, "varName");
@@ -1928,7 +1928,7 @@ SamsungSetBookmark(struct upnphttp * h, const char * action)
 	struct NameValueParserData data;
 	char *ObjectID, *PosSecond;
 
-	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data, 0);
+	ParseNameValue(h->req_buf + h->req_contentoff, h->req_contentlen, &data);
 	ObjectID = GetValueFromNameValueList(&data, "ObjectID");
 	PosSecond = GetValueFromNameValueList(&data, "PosSecond");
 	if( ObjectID && PosSecond )
