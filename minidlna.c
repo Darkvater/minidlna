@@ -381,6 +381,7 @@ rescan:
 			free(children);
 			log_close();
 			freeoptions();
+			free(children);
 			exit(EXIT_SUCCESS);
 		}
 		else if (*scanner_pid < 0)
@@ -468,9 +469,21 @@ static int strtobool(const char *str)
 static void init_nls(void)
 {
 #ifdef ENABLE_NLS
-	setlocale(LC_MESSAGES, "");
-	setlocale(LC_CTYPE, "en_US.utf8");
-	DPRINTF(E_DEBUG, L_GENERAL, "Using locale dir %s\n", bindtextdomain("minidlna", getenv("TEXTDOMAINDIR")));
+	const char *messages, *ctype, *locale_dir;
+
+	ctype = setlocale(LC_CTYPE, "");
+	if (!ctype || !strcmp(ctype, "C"))
+		ctype = setlocale(LC_CTYPE, "en_US.utf8");
+	if (!ctype)
+		DPRINTF(E_WARN, L_GENERAL, "Unset locale\n");
+	else if (!strstr(ctype, "utf8") && !strstr(ctype, "UTF8") &&
+		 !strstr(ctype, "utf-8") && !strstr(ctype, "UTF-8"))
+		DPRINTF(E_WARN, L_GENERAL, "Using unsupported non-utf8 locale '%s'\n", ctype);
+	messages = setlocale(LC_MESSAGES, "");
+	if (!messages)
+		messages = "unset";
+	locale_dir = bindtextdomain("minidlna", getenv("TEXTDOMAINDIR"));
+	DPRINTF(E_DEBUG, L_GENERAL, "Using locale dir '%s' and locale langauge %s/%s\n", locale_dir, messages, ctype);
 	textdomain("minidlna");
 #endif
 }
@@ -555,6 +568,8 @@ init(int argc, char **argv)
 						MAX_LAN_ADDR, word);
 					break;
 				}
+				while (isspace(*word))
+					word++;
 				runtime_vars.ifaces[ifaces++] = word;
 			}
 			break;
@@ -721,7 +736,8 @@ init(int argc, char **argv)
 				/* Symbolic username given, not UID. */
 				struct passwd *entry = getpwnam(ary_options[i].value);
 				if (!entry)
-					DPRINTF(E_FATAL, L_GENERAL, "Bad user '%s'.\n", argv[i]);
+					DPRINTF(E_FATAL, L_GENERAL, "Bad user '%s'.\n",
+						ary_options[i].value);
 				uid = entry->pw_uid;
 			}
 			break;
@@ -1018,11 +1034,11 @@ main(int argc, char **argv)
 
 	for (i = 0; i < L_MAX; i++)
 		log_level[i] = E_WARN;
-	init_nls();
 
 	ret = init(argc, argv);
 	if (ret != 0)
 		return 1;
+	init_nls();
 
 	DPRINTF(E_WARN, L_GENERAL, "Starting " SERVER_NAME " version " MINIDLNA_VERSION ".\n");
 	if (sqlite3_libversion_number() < 3005001)
@@ -1056,6 +1072,7 @@ main(int argc, char **argv)
 	if (sssdp < 0)
 	{
 		DPRINTF(E_INFO, L_GENERAL, "Failed to open socket for receiving SSDP. Trying to use MiniSSDPd\n");
+		reload_ifaces(0);	/* populate lan_addr[0].str */
 		if (SubmitServicesToMiniSSDPD(lan_addr[0].str, runtime_vars.port) < 0)
 			DPRINTF(E_FATAL, L_GENERAL, "Failed to connect to MiniSSDPd. EXITING");
 	}
@@ -1295,10 +1312,6 @@ shutdown:
 	if (scanning && scanner_pid)
 		kill(scanner_pid, SIGKILL);
 
-	/* kill other child processes */
-	process_reap_children();
-	free(children);
-
 	/* close out open sockets */
 	while (upnphttphead.lh_first != NULL)
 	{
@@ -1314,6 +1327,8 @@ shutdown:
 	if (sbeacon >= 0)
 		close(sbeacon);
 #endif
+	if (smonitor >= 0)
+		close(smonitor);
 	
 	for (i = 0; i < n_lan_addr; i++)
 	{
@@ -1323,6 +1338,10 @@ shutdown:
 
 	if (inotify_thread)
 		pthread_join(inotify_thread, NULL);
+
+	/* kill other child processes */
+	process_reap_children();
+	free(children);
 
 	sql_exec(db, "UPDATE SETTINGS set VALUE = '%u' where KEY = 'UPDATE_ID'", updateID);
 	sqlite3_close(db);
