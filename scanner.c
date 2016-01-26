@@ -132,6 +132,23 @@ insert_container(const char *item, const char *rootParent, const char *refID, co
 	return ret;
 }
 
+char*
+sql_get_season_folder_for_series(const char *refID, const char *name)
+{
+	char *series_album_art = NULL;
+	char *refID_buf = strdup(refID);
+
+	do {
+		strip_char(refID_buf, '$');
+		series_album_art = sql_get_text_field(db, "SELECT ALBUM_ART from DETAILS d INNER JOIN OBJECTS o on (d.ID = o.DETAIL_ID)"
+			" where o.PARENT_ID in (SELECT o.OBJECT_ID from DETAILS d INNER JOIN OBJECTS o ON (d.ID = o.DETAIL_ID) where d.ALBUM = %Q)"
+			" and o.OBJECT_ID = %Q", name, refID_buf);
+	} while (series_album_art == NULL && *refID_buf != '\0');
+
+	free(refID_buf);
+	return series_album_art;
+}
+
 void
 insert_containers_for_video(const char *name, const char *refID, const char *class, int64_t detailID)
 {
@@ -146,20 +163,15 @@ insert_containers_for_video(const char *name, const char *refID, const char *cla
 
 	char *series = result[3], *season = result[4];
 	int video_type = atoi(result[5]);
-	char *refID_buf = strdup(refID);
 	static struct virtual_item last_series;
 	static struct virtual_item last_season;
 	static long long last_movie_objectID = 0;
-
-	strip_char(refID_buf, '$');
-	char *album_art = sql_get_text_field(db, "SELECT ALBUM_ART from DETAILS d left join OBJECTS o on (d.ID = o.DETAIL_ID) where o.OBJECT_ID = %Q", refID_buf);
 
 	if (video_type == TVEPISODE && series)
 	{
 		if (!valid_cache || strcmp(series, last_series.name) != 0)
 		{
-			strip_char(refID_buf, '$');
-			char *series_album_art = sql_get_text_field(db, "SELECT ALBUM_ART from DETAILS d left join OBJECTS o on (d.ID = o.DETAIL_ID) where o.OBJECT_ID = %Q", refID_buf);
+			char *series_album_art = sql_get_text_field(db, "SELECT ALBUM_ART from DETAILS d where VIDEO_TYPE = %u and ALBUM = (SELECT ALBUM from DETAILS d INNER JOIN OBJECTS o ON (d.ID = o.DETAIL_ID) where o.OBJECT_ID = %Q)", TVSERIES, refID);
 			insert_container(series, VIDEO_SERIES_ID, NULL, "playlistContainer", NULL, NULL, series_album_art, &objectID, &parentID);
 			sprintf(last_series.parentID, VIDEO_SERIES_ID"$%llX", (long long)parentID);
 			strncpyt(last_series.name, series, sizeof(last_series.name));
@@ -172,10 +184,12 @@ insert_containers_for_video(const char *name, const char *refID, const char *cla
 		{
 			char *season_name;
 			xasprintf(&season_name, _("Season %02d"), atoi(season));
-			insert_container(season_name, last_series.parentID, NULL, "playlistContainer", NULL, NULL, album_art, &objectID, &parentID);
+			char *season_album_art = sql_get_season_folder_for_series(refID, last_series.name);
+			insert_container(season_name, last_series.parentID, NULL, "playlistContainer", NULL, NULL, season_album_art, &objectID, &parentID);
 			sprintf(last_season.parentID, "%s$%llX", last_series.parentID, (long long)parentID);
 			strncpyt(last_season.name, season, sizeof(last_season.name));
 			last_season.objectID = objectID;
+			sqlite3_free(season_album_art);
 			free(season_name);
 		}
 		else
@@ -206,8 +220,6 @@ insert_containers_for_video(const char *name, const char *refID, const char *cla
 		}
 	}
 
-	free(refID_buf);
-	sqlite3_free(album_art);
 _exit:
 	sqlite3_free_table(result);
 }
