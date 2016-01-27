@@ -79,6 +79,55 @@
 # define __SORT_LIMIT
 #endif
 
+/* Standard Errors:
+ *
+ * errorCode errorDescription Description
+ * --------	---------------- -----------
+ * 401 		Invalid Action 	No action by that name at this service.
+ * 402 		Invalid Args 	Could be any of the following: not enough in args,
+ * 							too many in args, no in arg by that name, 
+ * 							one or more in args are of the wrong data type.
+ * 403 		Out of Sync 	Out of synchronization.
+ * 501 		Action Failed 	May be returned in current state of service
+ * 							prevents invoking that action.
+ * 600-699 	TBD 			Common action errors. Defined by UPnP Forum
+ * 							Technical Committee.
+ * 700-799 	TBD 			Action-specific errors for standard actions.
+ * 							Defined by UPnP Forum working committee.
+ * 800-899 	TBD 			Action-specific errors for non-standard actions. 
+ * 							Defined by UPnP vendor.
+*/
+static void
+SoapError(struct upnphttp * h, int errCode, const char * errDesc)
+{
+	static const char resp[] = 
+		"<s:Envelope "
+		"xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+		"s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"
+		"<s:Body>"
+		"<s:Fault>"
+		"<faultcode>s:Client</faultcode>"
+		"<faultstring>UPnPError</faultstring>"
+		"<detail>"
+		"<UPnPError xmlns=\"urn:schemas-upnp-org:control-1-0\">"
+		"<errorCode>%d</errorCode>"
+		"<errorDescription>%s</errorDescription>"
+		"</UPnPError>"
+		"</detail>"
+		"</s:Fault>"
+		"</s:Body>"
+		"</s:Envelope>";
+
+	char body[2048];
+	int bodylen;
+
+	DPRINTF(E_WARN, L_HTTP, "Returning UPnPError %d: %s\n", errCode, errDesc);
+	bodylen = snprintf(body, sizeof(body), resp, errCode, errDesc);
+	BuildResp2_upnphttp(h, 500, "Internal Server Error", body, bodylen);
+	SendResp_upnphttp(h);
+	CloseSocket_upnphttp(h);
+}
+
 static void
 BuildSendAndCloseSoapResp(struct upnphttp * h,
                           const char * body, int bodylen)
@@ -542,7 +591,7 @@ set_filter_flags(char *filter, struct upnphttp *h)
 	return flags;
 }
 
-char *
+static char *
 parse_sort_criteria(char *sortCriteria, int *error)
 {
 	char *order = NULL;
@@ -647,7 +696,7 @@ add_resized_res(int srcw, int srch, int reqw, int reqh, char *dlna_pn,
 	int dstw = reqw;
 	int dsth = reqh;
 
-	if( args->flags & FLAG_NO_RESIZE )
+	if( (args->flags & FLAG_NO_RESIZE) && reqw > 160 && reqh > 160 )
 		return;
 
 	strcatf(args->str, "&lt;res ");
@@ -820,6 +869,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 #endif
 	}
 	passed_args->returned++;
+	passed_args->flags &= ~RESPONSE_FLAGS;
 
 	if( strncmp(class, "item", 4) == 0 )
 	{
@@ -1078,7 +1128,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 									     "http://%s:%d/Captions/%s.srt"
 									   "&lt;/res&gt;",
 									   lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
-						else if( passed_args->filter & FILTER_SEC_CAPTION_INFO_EX )
+						if( passed_args->filter & FILTER_SEC_CAPTION_INFO_EX )
 							ret = strcatf(str, "&lt;sec:CaptionInfoEx sec:type=\"srt\"&gt;"
 							                     "http://%s:%d/Captions/%s.srt"
 							                   "&lt;/sec:CaptionInfoEx&gt;",
@@ -1327,12 +1377,15 @@ BrowseContentDirectory(struct upnphttp * h, const char * action)
 				refid_sql = magic->refid_sql;
 			if (magic->where)
 				strncpyt(where, magic->where, sizeof(where));
+			if (magic->orderby && !GETFLAG(DLNA_STRICT_MASK))
+				orderBy = strdup(magic->orderby);
 			if (magic->max_count > 0)
 			{
+				int limit = MAX(magic->max_count - StartingIndex, 0);
 				ret = get_child_count(ObjectID, magic);
-				totalMatches = ret > magic->max_count ? magic->max_count : ret;
-				if (RequestedCount > magic->max_count || RequestedCount < 0)
-					RequestedCount = magic->max_count;
+				totalMatches = MIN(ret, limit);
+				if (RequestedCount > limit || RequestedCount < 0)
+					RequestedCount = limit;
 			}
 		}
 		if (!where[0])
@@ -1341,7 +1394,7 @@ BrowseContentDirectory(struct upnphttp * h, const char * action)
 		if (!totalMatches)
 			totalMatches = get_child_count(ObjectID, magic);
 		ret = 0;
-		if( SortCriteria )
+		if (SortCriteria && !orderBy)
 		{
 			__SORT_LIMIT
 			orderBy = parse_sort_criteria(SortCriteria, &ret);
@@ -1360,6 +1413,9 @@ BrowseContentDirectory(struct upnphttp * h, const char * action)
 				__SORT_LIMIT
 				ret = xasprintf(&orderBy, "order by o.CLASS, d.DISC, d.TRACK, d.TITLE COLLATE naturalsort");
 			}
+			/* LG TV ordering bug */
+			else if( args.client == ELGDevice )
+				ret = xasprintf(&orderBy, "order by o.CLASS, d.TITLE");
 			else
 				orderBy = parse_sort_criteria(SortCriteria, &ret);
 			if( ret == -1 )
@@ -1414,7 +1470,7 @@ browse_error:
 	free(str.data);
 }
 
-inline void
+static inline void
 charcat(struct string_s *str, char c)
 {
 	if (str->size <= str->off)
@@ -1899,22 +1955,41 @@ SamsungGetFeatureList(struct upnphttp * h, const char * action)
 	static const char resp[] =
 		"<u:X_GetFeatureListResponse xmlns:u=\"urn:schemas-upnp-org:service:ContentDirectory:1\">"
 		"<FeatureList>"
-		"<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n"
 		"&lt;Features xmlns=\"urn:schemas-upnp-org:av:avs\""
 		" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
 		" xsi:schemaLocation=\"urn:schemas-upnp-org:av:avs http://www.upnp.org/schemas/av/avs.xsd\"&gt;"
 		"&lt;Feature name=\"samsung.com_BASICVIEW\" version=\"1\"&gt;"
-		 "&lt;container id=\"" MUSIC_ID "\" type=\"object.item.audioItem\"/&gt;"
-		 "&lt;container id=\"" VIDEO_ID "\" type=\"object.item.videoItem\"/&gt;"
-		 "&lt;container id=\"" IMAGE_ID "\" type=\"object.item.imageItem\"/&gt;"
+		 "&lt;container id=\"%s\" type=\"object.item.audioItem\"/&gt;"
+		 "&lt;container id=\"%s\" type=\"object.item.videoItem\"/&gt;"
+		 "&lt;container id=\"%s\" type=\"object.item.imageItem\"/&gt;"
 		"&lt;/Feature&gt;"
 		"&lt;/Features&gt;"
 		"</FeatureList></u:X_GetFeatureListResponse>";
+	const char *audio = MUSIC_ID;
+	const char *video = VIDEO_ID;
+	const char *image = IMAGE_ID;
+	char body[1024];
+	int len;
 
 	if (runtime_vars.root_container)
-		return SoapError(h, 401, "Invalid Action");
+	{
+		if (strcmp(runtime_vars.root_container, BROWSEDIR_ID) == 0)
+		{
+			audio = MUSIC_DIR_ID;
+			video = VIDEO_DIR_ID;
+			image = IMAGE_DIR_ID;
+		}
+		else
+		{
+			audio = runtime_vars.root_container;
+			video = runtime_vars.root_container;
+			image = runtime_vars.root_container;
+		}
+	}
 
-	BuildSendAndCloseSoapResp(h, resp, sizeof(resp)-1);
+	len = snprintf(body, sizeof(body), resp, audio, video, image);
+
+	BuildSendAndCloseSoapResp(h, body, len);
 }
 
 static void
@@ -2005,54 +2080,5 @@ ExecuteSoapAction(struct upnphttp * h, const char * action, int n)
 	}
 
 	SoapError(h, 401, "Invalid Action");
-}
-
-/* Standard Errors:
- *
- * errorCode errorDescription Description
- * --------	---------------- -----------
- * 401 		Invalid Action 	No action by that name at this service.
- * 402 		Invalid Args 	Could be any of the following: not enough in args,
- * 							too many in args, no in arg by that name, 
- * 							one or more in args are of the wrong data type.
- * 403 		Out of Sync 	Out of synchronization.
- * 501 		Action Failed 	May be returned in current state of service
- * 							prevents invoking that action.
- * 600-699 	TBD 			Common action errors. Defined by UPnP Forum
- * 							Technical Committee.
- * 700-799 	TBD 			Action-specific errors for standard actions.
- * 							Defined by UPnP Forum working committee.
- * 800-899 	TBD 			Action-specific errors for non-standard actions. 
- * 							Defined by UPnP vendor.
-*/
-void
-SoapError(struct upnphttp * h, int errCode, const char * errDesc)
-{
-	static const char resp[] = 
-		"<s:Envelope "
-		"xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
-		"s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"
-		"<s:Body>"
-		"<s:Fault>"
-		"<faultcode>s:Client</faultcode>"
-		"<faultstring>UPnPError</faultstring>"
-		"<detail>"
-		"<UPnPError xmlns=\"urn:schemas-upnp-org:control-1-0\">"
-		"<errorCode>%d</errorCode>"
-		"<errorDescription>%s</errorDescription>"
-		"</UPnPError>"
-		"</detail>"
-		"</s:Fault>"
-		"</s:Body>"
-		"</s:Envelope>";
-
-	char body[2048];
-	int bodylen;
-
-	DPRINTF(E_WARN, L_HTTP, "Returning UPnPError %d: %s\n", errCode, errDesc);
-	bodylen = snprintf(body, sizeof(body), resp, errCode, errDesc);
-	BuildResp2_upnphttp(h, 500, "Internal Server Error", body, bodylen);
-	SendResp_upnphttp(h);
-	CloseSocket_upnphttp(h);
 }
 
