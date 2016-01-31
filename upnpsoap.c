@@ -370,49 +370,52 @@ GetCurrentConnectionInfo(struct upnphttp * h, const char * action)
 }
 
 /* Standard DLNA/UPnP filter flags */
-#define FILTER_CHILDCOUNT                        0x00000001
-#define FILTER_DC_CREATOR                        0x00000002
-#define FILTER_DC_DATE                           0x00000004
-#define FILTER_DC_DESCRIPTION                    0x00000008
-#define FILTER_DLNA_NAMESPACE                    0x00000010
-#define FILTER_REFID                             0x00000020
-#define FILTER_RES                               0x00000040
-#define FILTER_RES_BITRATE                       0x00000080
-#define FILTER_RES_DURATION                      0x00000100
-#define FILTER_RES_NRAUDIOCHANNELS               0x00000200
-#define FILTER_RES_RESOLUTION                    0x00000400
-#define FILTER_RES_SAMPLEFREQUENCY               0x00000800
-#define FILTER_RES_SIZE                          0x00001000
-#define FILTER_SEARCHABLE                        0x00002000
-#define FILTER_UPNP_ACTOR                        0x00004000
-#define FILTER_UPNP_ALBUM                        0x00008000
-#define FILTER_UPNP_ALBUMARTURI                  0x00010000
-#define FILTER_UPNP_ALBUMARTURI_DLNA_PROFILEID   0x00020000
-#define FILTER_UPNP_RATING                       0x00040000
-#define FILTER_UPNP_GENRE                        0x00080000
-#define FILTER_UPNP_ORIGINALTRACKNUMBER          0x00100000
-#define FILTER_UPNP_SEARCHCLASS                  0x00200000
-#define FILTER_UPNP_STORAGEUSED                  0x00400000
-#define FILTER_DC_LONG_DESCRIPTION               0x00800000
-#define FILTER_UPNP_AUTHOR                       0x20000000
+#define FILTER_CHILDCOUNT                        0x0000000000000001
+#define FILTER_DC_CREATOR                        0x0000000000000002
+#define FILTER_DC_DATE                           0x0000000000000004
+#define FILTER_DC_DESCRIPTION                    0x0000000000000008
+#define FILTER_DLNA_NAMESPACE                    0x0000000000000010
+#define FILTER_REFID                             0x0000000000000020
+#define FILTER_RES                               0x0000000000000040
+#define FILTER_RES_BITRATE                       0x0000000000000080
+#define FILTER_RES_DURATION                      0x0000000000000100
+#define FILTER_RES_NRAUDIOCHANNELS               0x0000000000000200
+#define FILTER_RES_RESOLUTION                    0x0000000000000400
+#define FILTER_RES_SAMPLEFREQUENCY               0x0000000000000800
+#define FILTER_RES_SIZE                          0x0000000000001000
+#define FILTER_SEARCHABLE                        0x0000000000002000
+#define FILTER_UPNP_ACTOR                        0x0000000000004000
+#define FILTER_UPNP_ALBUM                        0x0000000000008000
+#define FILTER_UPNP_ALBUMARTURI                  0x0000000000010000
+#define FILTER_UPNP_ALBUMARTURI_DLNA_PROFILEID   0x0000000000020000
+#define FILTER_UPNP_RATING                       0x0000000000040000
+#define FILTER_UPNP_GENRE                        0x0000000000080000
+#define FILTER_UPNP_ORIGINALTRACKNUMBER          0x0000000000100000
+#define FILTER_UPNP_SEARCHCLASS                  0x0000000000200000
+#define FILTER_UPNP_STORAGEUSED                  0x0000000000400000
+#define FILTER_DC_LONG_DESCRIPTION               0x0000000000800000
+#define FILTER_UPNP_AUTHOR                       0x0000000001000000
+#define FILTER_DC_PUBLISHER                      0x0000000002000000
 /* Vendor-specific filter flags */
-#define FILTER_SEC_CAPTION_INFO_EX               0x01000000
-#define FILTER_SEC_DCM_INFO                      0x02000000
-#define FILTER_PV_SUBTITLE_FILE_TYPE             0x04000000
-#define FILTER_PV_SUBTITLE_FILE_URI              0x08000000
-#define FILTER_PV_SUBTITLE                       0x0C000000
-#define FILTER_AV_MEDIA_CLASS                    0x10000000
+#define FILTER_SEC_CAPTION_INFO_EX               0x0100000000000000
+#define FILTER_SEC_DCM_INFO                      0x0200000000000000
+#define FILTER_PV_SUBTITLE_FILE_TYPE             0x0400000000000000
+#define FILTER_PV_SUBTITLE_FILE_URI              0x0800000000000000
+#define FILTER_PV_SUBTITLE                       (FILTER_PV_SUBTITLE_FILE_TYPE | FILTER_PV_SUBTITLE_FILE_URI)
+#define FILTER_AV_MEDIA_CLASS                    0x1000000000000000
 
-static uint32_t
+#define FILTER_ALL_EXCEPT_VENDOR_SPECIFIC        0x00FFFFFFFFFFFFFF
+
+static uint64_t
 set_filter_flags(char *filter, struct upnphttp *h)
 {
 	char *item, *saveptr = NULL;
-	uint32_t flags = 0;
+	uint64_t flags = 0;
 	int samsung = h->req_client && (h->req_client->type->flags & FLAG_SAMSUNG);
 
 	if( !filter || (strlen(filter) <= 1) ) {
-		/* Not the full 32 bits.  Skip vendor-specific stuff by default. */
-		flags = 0xFFFFFF;
+		/* Not all the flags.  Skip vendor-specific stuff by default. */
+		flags = FILTER_ALL_EXCEPT_VENDOR_SPECIFIC;
 		if (samsung)
 			flags |= FILTER_SEC_CAPTION_INFO_EX | FILTER_SEC_DCM_INFO;
 	}
@@ -439,6 +442,10 @@ set_filter_flags(char *filter, struct upnphttp *h)
 		else if( strcmp(item, "dc:creator") == 0 )
 		{
 			flags |= FILTER_DC_CREATOR;
+		}
+		else if( strcmp(item, "dc:pulisher") == 0 )
+		{
+			flags |= FILTER_DC_PUBLISHER;
 		}
 		else if (strcmp(item, "upnp:director") == 0)
 		{
@@ -791,7 +798,7 @@ object_exists(const char *object)
 #define COLUMNS "o.DETAIL_ID, o.CLASS," \
                 " d.SIZE, d.TITLE, d.DURATION, d.BITRATE, d.SAMPLERATE, d.ARTIST," \
                 " d.ALBUM, d.GENRE, d.COMMENT, d.DESCRIPTION, d.CHANNELS, d.TRACK, d.DATE, d.RESOLUTION," \
-                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.ROTATION, d.DISC, d.RATING, d.AUTHOR "
+                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.ROTATION, d.DISC, d.RATING, d.AUTHOR, d.PUBLISHER "
 #define SELECT_COLUMNS "SELECT o.OBJECT_ID, o.PARENT_ID, o.REF_ID, " COLUMNS
 
 #define NON_ZERO(x) (x && atoi(x))
@@ -834,7 +841,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 	     *duration = argv[7], *bitrate = argv[8], *sampleFrequency = argv[9], *artists = argv[10], *album = argv[11],
 	     *genres = argv[12], *comment = argv[13], *description = argv[14], * nrAudioChannels = argv[15], *track = argv[16], *date = argv[17],
 	     *resolution = argv[18], *tn = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22],
-	     *album_art = argv[23], *rotate = argv[24]/*, *disc = argv[25]*/, *rating = argv[26], *author = argv[27];
+	     *album_art = argv[23], *rotate = argv[24], *disc = argv[25], *rating = argv[26], *author = argv[27], *publisher = argv[28];
 	char dlna_buf[128];
 	const char *ext;
 	struct string_s *str = passed_args->str;
@@ -995,6 +1002,10 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( creator && (passed_args->filter & FILTER_DC_CREATOR) ) {
 			ret = append(str, creator, *mime == 'v' ? "upnp:director" : "dc:creator");
 		}
+		if (publisher && (passed_args->filter & FILTER_DC_PUBLISHER))
+		{
+			ret = append(str, publisher, "dc:publisher");
+		}
 		if (author && (passed_args->filter & FILTER_UPNP_AUTHOR)) {
 			ret = append_multiple_from_commaseparated_string(str, author, "upnp:author");
 		}
@@ -1023,6 +1034,9 @@ callback(void *args, int argc, char **argv, char **azColName)
 		}
 		if( NON_ZERO(track) && (passed_args->filter & FILTER_UPNP_ORIGINALTRACKNUMBER) ) {
 			ret = append(str, track, *mime == 'v' ? "upnp:episodeNumber" : "upnp:originalTrackNumber");
+		}
+		if( NON_ZERO(disc) && *mime == 'v' && (passed_args->filter & FILTER_UPNP_ORIGINALTRACKNUMBER) ) {
+			ret = append(str, disc, "upnp:episodeSeason");
 		}
 		if( passed_args->filter & FILTER_RES ) {
 			ext = mime_to_ext(mime);
@@ -1206,6 +1220,9 @@ callback(void *args, int argc, char **argv, char **azColName)
 		}
 		if( creator && (passed_args->filter & FILTER_DC_CREATOR) ) {
 			ret = append(str, creator, "dc:creator");
+		}
+		if (publisher && (passed_args->filter & FILTER_DC_PUBLISHER)) {
+			ret = append(str, publisher, "dc:publisher");
 		}
 		if( genres && (passed_args->filter & FILTER_UPNP_GENRE) ) {
 			ret = append_multiple_from_commaseparated_string(str, genres, "upnp:genre");
@@ -1656,6 +1673,12 @@ parse_search_criteria(const char *str, char *sep)
 				{
 					strcatf(&criteria, "d.CREATOR");
 					s += 10;
+					continue;
+				}
+				else if (strncmp(s, "dc:publisher", 12) == 0)
+				{
+					strcatf(&criteria, "d.PUBLISHER");
+					s += 12;
 					continue;
 				}
 				else

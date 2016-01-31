@@ -34,6 +34,7 @@ typedef struct metadata_s {
 	char *       title;
 	char *       artist;
 	char *       creator;
+	char *       publisher;
 	char *       author;
 	char *       album;
 	char *       genre;

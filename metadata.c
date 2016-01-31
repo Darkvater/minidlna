@@ -46,24 +46,25 @@
 #include "log.h"
 #include "scanner.h"
 
-#define FLAG_TITLE	0x00000001
-#define FLAG_ARTIST	0x00000002
-#define FLAG_ALBUM	0x00000004
-#define FLAG_GENRE	0x00000008
-#define FLAG_COMMENT	0x00000010
-#define FLAG_CREATOR	0x00000020
-#define FLAG_DATE	0x00000040
-#define FLAG_DLNA_PN	0x00000080
-#define FLAG_MIME	0x00000100
-#define FLAG_DURATION	0x00000200
-#define FLAG_RESOLUTION	0x00000400
-#define FLAG_DESCRIPTION 0x00010000
-#define FLAG_RATING 0x00020000
-#define FLAG_AUTHOR	0x00040000
-#define FLAG_TRACK 0x00020000
-#define FLAG_DISC 0x0040000
+#define FLAG_TITLE       0x00000001
+#define FLAG_ARTIST      0x00000002
+#define FLAG_ALBUM       0x00000004
+#define FLAG_GENRE       0x00000008
+#define FLAG_COMMENT     0x00000010
+#define FLAG_CREATOR     0x00000020
+#define FLAG_DATE        0x00000040
+#define FLAG_DLNA_PN     0x00000080
+#define FLAG_MIME        0x00000100
+#define FLAG_DURATION    0x00000200
+#define FLAG_RESOLUTION  0x00000400
+#define FLAG_DESCRIPTION 0x00000800
+#define FLAG_RATING      0x00001000
+#define FLAG_AUTHOR      0x00002000
+#define FLAG_TRACK       0x00004000
+#define FLAG_DISC        0x00008000
+#define FLAG_PUBLISHER   0x00010000
 
-#define ALL_FLAGS 0xFFFFFFFF
+#define ALL_FLAGS        0xFFFFFFFF
 
 /* Audio profile flags */
 enum audio_profiles {
@@ -276,6 +277,7 @@ parse_movie_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_from_xml_if_exists(&m->comment, xml, "tagline");
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
+	set_value_from_xml_if_exists(&m->publisher, xml, "studio");
 	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
 	set_value_list_from_xml_if_exists(&m->author, xml, "writer");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
@@ -292,6 +294,7 @@ parse_tvshow_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_from_xml_if_exists_no_overwrite(&m->date, xml, "premiered");
 	set_value_from_xml_if_exists_no_overwrite(&m->description, xml, "plot");
 	set_value_from_xml_if_exists_no_overwrite(&m->creator, xml, "director");
+	set_value_from_xml_if_exists_no_overwrite(&m->publisher, xml, "studio");
 	set_value_from_xml_if_exists(&m->rating, xml, "mpaa");
 	set_value_list_from_xml_if_exists_no_overwrite(&m->author, xml, "writer");
 	set_value_list_from_xml_if_exists(&m->genre, xml, "genre");
@@ -329,6 +332,7 @@ parse_tvepisode_nfo(struct NameValueParserData *xml, metadata_t *m)
 	set_value_list_from_xml_if_exists(&m->author, xml, "credits");
 	set_value_from_xml_if_exists(&m->description, xml, "plot");
 	set_value_from_xml_if_exists(&m->creator, xml, "director");
+	set_value_from_xml_if_exists(&m->publisher, xml, "studio");
 	set_value_from_xml_if_exists(&m->date, xml, "aired");
 	m->videotype = TVEPISODE;
 }
@@ -435,12 +439,12 @@ add_entry_to_details(const char *path, size_t entry_size, time_t entry_timestamp
 {
 	int ret = sql_exec(db, "INSERT into DETAILS"
 	                       " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
-	                       "  TITLE, CREATOR, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
+	                       "  TITLE, CREATOR, PUBLISHER, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
 	                       "  ALBUM, TRACK, DISC, DLNA_PN, MIME, ALBUM_ART, VIDEO_TYPE) "
 	                       "VALUES"
-	                       " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld, %d);",
+	                       " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld, %d);",
 	                       path, (long long)entry_size, (long long)entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->resolution,
-	                       m->title, m->creator, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
+	                       m->title, m->creator, m->publisher, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
 	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, (long long)album_art_id, (int)m->videotype);
 
 	if (ret != SQLITE_OK)
@@ -460,10 +464,10 @@ update_entry_in_details(const char *path, metadata_t *m, int64_t detailID)
 {
 	int ret = sql_exec(db, "UPDATE DETAILS set"
 		" DATE=%Q, CHANNELS=%u, BITRATE=%u, SAMPLERATE=%u, RESOLUTION=%Q,"
-		" TITLE=%Q, CREATOR=%Q, AUTHOR=%Q, ARTIST=%Q, GENRE=%Q, COMMENT=%Q, DESCRIPTION=%Q, RATING=%Q,"
+		" TITLE=%Q, CREATOR=%Q, PUBLISHER=%Q, AUTHOR=%Q, ARTIST=%Q, GENRE=%Q, COMMENT=%Q, DESCRIPTION=%Q, RATING=%Q,"
 		" ALBUM=%Q, TRACK=%u, DISC=%u, DLNA_PN=%Q, MIME=%Q, VIDEO_TYPE=%u where ID=%lld",
 		m->date, m->channels, m->bitrate, m->frequency, m->resolution,
-		m->title, m->creator, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
+		m->title, m->creator, m->publisher, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
 		m->album, m->track, m->disc, m->dlna_pn, m->mime, m->videotype, detailID);
 
 	if (ret != SQLITE_OK)
@@ -493,6 +497,8 @@ free_metadata(metadata_t *m, uint32_t flags)
 		free(m->genre);
 	if( flags & FLAG_CREATOR )
 		free(m->creator);
+	if( flags & FLAG_PUBLISHER )
+		free(m->publisher);
 	if (flags & FLAG_AUTHOR)
 		free(m->author);
 	if( flags & FLAG_DATE )
@@ -521,7 +527,7 @@ GetNfoMetadata(const char *path, int64_t detailID)
 	int nrows;
 	char **result;
 
-	char * sql = sqlite3_mprintf("SELECT d.TITLE, d.ARTIST, d.CREATOR, d.AUTHOR, d.ALBUM, d.GENRE, d.COMMENT, "
+	char * sql = sqlite3_mprintf("SELECT d.TITLE, d.ARTIST, d.CREATOR, d.PUBLISHER, d.AUTHOR, d.ALBUM, d.GENRE, d.COMMENT, "
 		"d.DESCRIPTION, d.RATING, d.DISC, d.TRACK, d.CHANNELS, d.BITRATE, d.SAMPLERATE, d.ROTATION, d.RESOLUTION, "
 		"d.DURATION, d.DATE, d.MIME, d.DLNA_PN from DETAILS d WHERE d.ID=%lld", detailID);
 
@@ -529,26 +535,27 @@ GetNfoMetadata(const char *path, int64_t detailID)
 	{
 		if (nrows == 1)
 		{
-			assign_value_if_exists(&m.title, result[20]);
-			assign_value_if_exists(&m.artist, result[21]);
-			assign_value_if_exists(&m.creator, result[22]);
-			assign_value_if_exists(&m.author, result[23]);
-			assign_value_if_exists(&m.album, result[24]);
-			assign_value_if_exists(&m.genre, result[25]);
-			assign_value_if_exists(&m.comment, result[26]);
-			assign_value_if_exists(&m.description, result[27]);
-			assign_value_if_exists(&m.rating, result[28]);
-			assign_integer_if_exists(&m.disc, result[29]);
-			assign_integer_if_exists(&m.track, result[30]);
-			assign_integer_if_exists(&m.channels, result[31]);
-			assign_integer_if_exists(&m.bitrate, result[32]);
-			assign_integer_if_exists(&m.frequency, result[33]);
-			assign_integer_if_exists(&m.rotation, result[34]);
-			assign_value_if_exists(&m.resolution, result[35]);
-			assign_value_if_exists(&m.duration, result[36]);
-			assign_value_if_exists(&m.date, result[37]);
-			assign_value_if_exists(&m.mime, result[38]);
-			assign_value_if_exists(&m.dlna_pn, result[39]);
+			assign_value_if_exists(&m.title, result[21]);
+			assign_value_if_exists(&m.artist, result[22]);
+			assign_value_if_exists(&m.creator, result[23]);
+			assign_value_if_exists(&m.publisher, result[24]);
+			assign_value_if_exists(&m.author, result[25]);
+			assign_value_if_exists(&m.album, result[26]);
+			assign_value_if_exists(&m.genre, result[27]);
+			assign_value_if_exists(&m.comment, result[28]);
+			assign_value_if_exists(&m.description, result[29]);
+			assign_value_if_exists(&m.rating, result[30]);
+			assign_integer_if_exists(&m.disc, result[31]);
+			assign_integer_if_exists(&m.track, result[32]);
+			assign_integer_if_exists(&m.channels, result[33]);
+			assign_integer_if_exists(&m.bitrate, result[34]);
+			assign_integer_if_exists(&m.frequency, result[35]);
+			assign_integer_if_exists(&m.rotation, result[36]);
+			assign_value_if_exists(&m.resolution, result[37]);
+			assign_value_if_exists(&m.duration, result[38]);
+			assign_value_if_exists(&m.date, result[39]);
+			assign_value_if_exists(&m.mime, result[40]);
+			assign_value_if_exists(&m.dlna_pn, result[41]);
 		}
 		sqlite3_free_table(result);
 	} else

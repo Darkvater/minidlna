@@ -38,7 +38,7 @@ Justin Maggard
 Features
 ==================
 
-- add new entries scanned from metadata: year, actors, director, (short/long) description, author, rating
+- add new entries scanned from metadata: year, actors, director, (short/long) description, author, rating, studio
 - add support for tv series / shows with metadata: air date, season, episode, episode title
 - improve UPNP reply types for video mime-type for director, album art, episodes
 - present metadata for folders to support virtual tv show folders.
