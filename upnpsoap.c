@@ -815,7 +815,10 @@ append_multiple_from_commaseparated_string(struct string_s *str, const char *val
 		ret += strcatf(str, "&lt;%s&gt;%s&lt;/%s&gt;", elementName, pch+1, elementName);
 		*pch = '\0';
 	}
-	ret += strcatf(str, "&lt;%s&gt;%s&lt;/%s&gt;", elementName, cpy_val, elementName);
+	if (counter == 0)
+	{
+		ret += strcatf(str, "&lt;%s&gt;%s&lt;/%s&gt;", elementName, cpy_val, elementName);
+	}
 	free(cpy_val);
 
 	return ret;
