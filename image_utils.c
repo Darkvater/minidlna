@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <setjmp.h>
 #include <jpeglib.h>
+#include <libgen.h>
 #ifdef HAVE_MACHINE_ENDIAN_H
 #include <machine/endian.h>
 #else
@@ -42,6 +43,7 @@
 #include "upnpreplyparse.h"
 #include "image_utils.h"
 #include "log.h"
+#include "utils.h"
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 # define SWAP16(w) ( (((w) >> 8) & 0x00ff) | (((w) << 8) & 0xff00) )
@@ -781,6 +783,7 @@ image_downsize(image_s * pdest, const image_s * psrc, int32_t width, int32_t hei
 	}
 }
 
+/* NOTE: can possibly return the same pointer if src and dst are the same size */
 image_s *
 image_resize(const image_s *src_image, int32_t width, int32_t height)
 {
@@ -862,7 +865,16 @@ image_save_to_jpeg_file(const image_s * pimage, const char * path)
 	buf = image_save_to_jpeg_buf(pimage, &size);
 	if( !buf )
 		return NULL;
+
  	dst_file = fopen(path, "w");
+	if ( !dst_file )
+	{
+		char *dir = strdup(path);
+		make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+		free(dir);
+	}
+
+	dst_file = fopen(path, "w");
 	if( !dst_file )
 	{
 		free(buf);

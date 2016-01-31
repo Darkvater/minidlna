@@ -102,7 +102,10 @@ save_resized_album_art_from_imsrc_to(const image_s *imsrc, const char *src_file,
 	{
 		image_s *imdst = image_resize(imsrc, dstw, dsth);
 		result = image_save_to_jpeg_file(imdst, dst_file);
-		image_free(imdst);
+		if (imsrc != imdst)
+		{
+			image_free(imdst);
+		}
 	}
 
 	if (result == NULL)

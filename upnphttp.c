@@ -1809,7 +1809,7 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 	DPRINTF(E_INFO, L_HTTP, "Done serving %s\n", file_path);
 	if( imsrc )
 		image_free(imsrc);
-	if( imdst )
+	if( imdst && imsrc != imdst)
 		image_free(imdst);
 	CloseSocket_upnphttp(h);
 resized_error:
