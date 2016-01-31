@@ -1017,8 +1017,9 @@ callback(void *args, int argc, char **argv, char **azColName)
 		}
 		if( passed_args->filter & FILTER_SEC_DCM_INFO ) {
 			/* Get bookmark */
-			ret = strcatf(str, "&lt;sec:dcmInfo&gt;CREATIONDATE=0,FOLDER=%s,BM=%d&lt;/sec:dcmInfo&gt;",
-			              title, sql_get_int_field(db, "SELECT SEC from BOOKMARKS where ID = '%s'", detailID));
+			int bookmark = sql_get_int_field(db, "SELECT SEC from BOOKMARKS where ID = '%s'", detailID);
+			snprintf(dlna_buf, sizeof(dlna_buf), "CREATIONDATE=0,FOLDER=%s,BM=%d", title, bookmark);
+			ret = append(str, dlna_buf, "sec:dcmInfo");
 		}
 		if (artists && (passed_args->filter & FILTER_UPNP_ACTOR)) {
 			ret = append_multiple_from_commaseparated_string(str, artists, *mime == 'v' ? "upnp:actor" : "upnp:artist");
@@ -1138,15 +1139,15 @@ callback(void *args, int argc, char **argv, char **azColName)
 					if( passed_args->flags & FLAG_HAS_CAPTIONS )
 					{
 						if( passed_args->flags & FLAG_CAPTION_RES )
-							ret = strcatf(str, "&lt;res protocolInfo=\"http-get:*:text/srt:*\"&gt;"
-									     "http://%s:%d/Captions/%s.srt"
-									   "&lt;/res&gt;",
-									   lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+						{
+							snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Captions/%s.srt", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+							ret = append_with_attributes(str, "protocolInfo=\"http-get:*:text/srt:*\"", dlna_buf, "res");
+						}
 						if( passed_args->filter & FILTER_SEC_CAPTION_INFO_EX )
-							ret = strcatf(str, "&lt;sec:CaptionInfoEx sec:type=\"srt\"&gt;"
-							                     "http://%s:%d/Captions/%s.srt"
-							                   "&lt;/sec:CaptionInfoEx&gt;",
-							                   lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+						{
+							snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Captions/%s.srt", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+							ret = append_with_attributes(str, "sec:type=\"srt\"", dlna_buf, "sec:CaptionInfoEx");
+						}
 					}
 					free(alt_title);
 					break;
