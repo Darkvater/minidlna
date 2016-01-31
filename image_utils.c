@@ -872,9 +872,9 @@ image_save_to_jpeg_file(const image_s * pimage, const char * path)
 		char *dir = strdup(path);
 		make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 		free(dir);
+		dst_file = fopen(path, "w");
 	}
 
-	dst_file = fopen(path, "w");
 	if( !dst_file )
 	{
 		free(buf);
