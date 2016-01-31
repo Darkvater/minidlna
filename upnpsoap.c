@@ -1167,19 +1167,15 @@ callback(void *args, int argc, char **argv, char **azColName)
 		}
 		if( (passed_args->flags & FLAG_MS_PFS) && *mime == 'i' ) {
 			if( passed_args->client == EMediaRoom && !album )
-				ret = strcatf(str, "&lt;upnp:album&gt;%s&lt;/upnp:album&gt;", "[No Keywords]");
+				ret = append(str, "[No Keywords]", "upnp:album");
 
 			/* EVA2000 doesn't seem to handle embedded thumbnails */
 			if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && NON_ZERO(tn) && IS_ZERO(rotate) ) {
-				ret = strcatf(str, "&lt;upnp:albumArtURI&gt;"
-				                   "http://%s:%d/Thumbnails/%s.jpg"
-				                   "&lt;/upnp:albumArtURI&gt;",
-				                   lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+				snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Thumbnails/%s.jpg", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+				ret = append(str, dlna_buf, "upnp:albumArtURI");
 			} else {
-				ret = strcatf(str, "&lt;upnp:albumArtURI&gt;"
-				                   "http://%s:%d/Resized/%s.jpg?width=160,height=160"
-				                   "&lt;/upnp:albumArtURI&gt;",
-				                   lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+				snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Resized/%s.jpg?width=160,height=160", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+				ret = append(str, dlna_buf, "upnp:albumArtURI");
 			}
 		}
 		ret = strcatf(str, "&lt;/item&gt;");
@@ -1206,10 +1202,10 @@ callback(void *args, int argc, char **argv, char **azColName)
 		                   title, class);
 		if( (passed_args->filter & FILTER_UPNP_STORAGEUSED) || strcmp(class+10, "storageFolder") == 0 ) {
 			/* TODO: Implement real folder size tracking */
-			ret = strcatf(str, "&lt;upnp:storageUsed&gt;%s&lt;/upnp:storageUsed&gt;", (size ? size : "-1"));
+			ret = append(str, size ? size : "-1", "upnp:storageUsed");
 		}
 		if( creator && (passed_args->filter & FILTER_DC_CREATOR) ) {
-			ret = strcatf(str, "&lt;dc:creator&gt;%s&lt;/dc:creator&gt;", creator);
+			ret = append(str, creator, "dc:creator");
 		}
 		if( genres && (passed_args->filter & FILTER_UPNP_GENRE) ) {
 			ret = append_multiple_from_commaseparated_string(str, genres, "upnp:genre");
