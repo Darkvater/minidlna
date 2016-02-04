@@ -46,7 +46,7 @@ notify_event_insert_directory(const char *name, const char *path, media_types ty
 	int n;
 	char path_buf[PATH_MAX];
 
-	DPRINTF(E_INFO, L_INOTIFY, "Scanning %s\n", path);
+	DPRINTF(E_DEBUG, L_INOTIFY, "Scanning to add directory %s\n", path);
 
 	if (access(path, R_OK | X_OK) != 0)
 	{
@@ -58,6 +58,8 @@ notify_event_insert_directory(const char *name, const char *path, media_types ty
 		DPRINTF(E_DEBUG, L_INOTIFY, "%s already exists\n", path);
 		return 0;
 	}
+
+	DPRINTF(E_INFO, L_INOTIFY, "Processing adding directory event [%s]\n", path);
 
 	x_strlcpy(path_buf, path, sizeof(path_buf));
 	id = sql_get_text_field(db, "SELECT OBJECT_ID from OBJECTS o left join DETAILS d on (d.ID = o.DETAIL_ID)"
@@ -108,7 +110,7 @@ notify_event_remove_directory(const char *path)
 	char **result;
 	int nrows, ret = 1;
 
-	DPRINTF(E_INFO, L_INOTIFY, "Removing %s\n", path);
+	DPRINTF(E_INFO, L_INOTIFY, "Processing remove directory event [%s]\n", path);
 
 	/* Invalidate the scanner cache so we don't insert files into non-existent containers */
 	valid_cache = 0;
@@ -143,6 +145,8 @@ notify_event_insert_file(char *name, const char *path, media_types types)
 	int ts;
 	struct stat st;
 
+	DPRINTF(E_DEBUG, L_INOTIFY, "Scanning to add file %s\n", path);
+
 	/* Is it cover art for another file? */
 	if (is_image(path))
 		update_if_album_art(path);
@@ -157,6 +161,8 @@ notify_event_insert_file(char *name, const char *path, media_types types)
 	/* If it's already in the database and hasn't been modified, skip it. */
 	if (stat(path, &st) != 0)
 		return -1;
+
+	DPRINTF(E_INFO, L_INOTIFY, "Processing add file event [%s]\n", path);
 
 	ts = sql_get_int_field(db, "SELECT TIMESTAMP from DETAILS where PATH = %Q", path);
 	if (!ts && is_playlist(path) && (sql_get_int_field(db, "SELECT ID from PLAYLISTS where PATH = %Q", path) > 0))
@@ -226,15 +232,17 @@ notify_event_remove_file(const char *path)
 	int64_t detailID;
 	int playlist;
 
+	DPRINTF(E_DEBUG, L_INOTIFY, "Scanning to remove file %s\n", path);
+
 	if (is_caption(path)) return delete_caption(path);
 
 	playlist = is_playlist(path);
-	detailID = sql_get_int64_field(db, "SELECT ID from %s where PATH = '%q'", playlist ? "PLAYLISTS" : "DETAILS", path);
+	detailID = sql_get_int64_field(db, "SELECT ID from %s where PATH = %Q", playlist ? "PLAYLISTS" : "DETAILS", path);
 	if (detailID == 0) return 1;
 
 	/* Invalidate the scanner cache so we don't insert files into non-existent containers */
 	valid_cache = 0;
-	DPRINTF(E_DEBUG, L_INOTIFY, "Processing remove file event [%s]\n", path);
+	DPRINTF(E_INFO, L_INOTIFY, "Processing remove file event [%s]\n", path);
 
 	if (playlist)
 	{

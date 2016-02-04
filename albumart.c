@@ -194,7 +194,6 @@ update_if_album_art(const char *path)
 		    (album_art || strncmp(dp->d_name, match, ncmp) == 0) )
 		{
 			DPRINTF(E_DEBUG, L_METADATA, "New file %s looks like cover art for %s\n", path, dp->d_name);
-			snprintf(file, sizeof(file), "%s/%s", dir, dp->d_name);
 			art_id = find_album_art(file, NULL, 0);
 			ret = sql_exec(db, "UPDATE DETAILS set ALBUM_ART = %lld where PATH = '%q'", (long long)art_id, file);
 			if( ret != SQLITE_OK )
@@ -266,7 +265,7 @@ save_resized:
 }
 
 static char *
-check_for_album_file(const char *path)
+check_for_album_file(const char *path, char **original_album_art_location)
 {
 	char file[MAXPATHLEN];
 	char mypath[MAXPATHLEN];
@@ -323,6 +322,7 @@ add_cached_image:
 			char *cache_file, *thumb;
 
 			DPRINTF(E_DEBUG, L_ARTWORK, "Found album art in %s\n", file);
+			*original_album_art_location = strdup(file);
 			if (art_cache_exists(file, &cache_file))
 				return cache_file;
 
@@ -346,14 +346,15 @@ int64_t
 find_album_art(const char *path, uint8_t *image_data, int image_size)
 {
 	struct stat st;
-	char *album_art = check_embedded_art(path, image_data, image_size);
-	if (album_art == NULL) album_art = check_for_album_file(path);
-	if (album_art == NULL || lstat(album_art, &st) != 0) return 0;
+	char *album_art = NULL;
+	char *album_art_cache = check_embedded_art(path, image_data, image_size);
+	if (album_art_cache == NULL) album_art_cache = check_for_album_file(path, &album_art);
+	if (album_art_cache == NULL || lstat(album_art, &st) != 0) return 0;
 
-	int64_t ret = sql_get_int64_field(db, "SELECT ID from ALBUM_ART where PATH = %Q", album_art);
+	int64_t ret = sql_get_int64_field(db, "SELECT ID from ALBUM_ART where PATH = %Q", album_art_cache);
 	if (ret == 0)
 	{
-		if (sql_exec(db, "INSERT into ALBUM_ART (PATH, TIMESTAMP) VALUES (%Q, %d)", album_art, st.st_mtime) == SQLITE_OK)
+		if (sql_exec(db, "INSERT into ALBUM_ART (PATH, TIMESTAMP) VALUES (%Q, %d)", album_art_cache, st.st_mtime) == SQLITE_OK)
 		{
 			ret = sqlite3_last_insert_rowid(db);
 		}
@@ -368,5 +369,6 @@ find_album_art(const char *path, uint8_t *image_data, int image_size)
 	}
 	
 	free(album_art);
+	free(album_art_cache);
 	return ret;
 }

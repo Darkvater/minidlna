@@ -973,34 +973,46 @@ start_scanner()
 	sql_exec(db, "pragma user_version = %d;", DB_VERSION);
 }
 
-static void
-scan_for_removed_files(const char* root_dir)
+static int
+remove_entry_callback(void *args, int argc, char **argv, char **azColName)
 {
-	int nrows;
-	char **result;
-	char *sql = sqlite3_mprintf("SELECT PATH, SIZE from DETAILS where PATH > %Q", root_dir);
+	struct stat st;
+	char *path = argv[0];
+	long long size = atoll(argv[1]);
+	char *mime = argv[2];
 
-	if (sql_get_table(db, sql, &result, &nrows, NULL) == SQLITE_OK)
+	if (quitting) return 1;
+
+	// entry doesn't exist anymore or is not accessible, or has been removed, remove
+	if (lstat(path, &st) != 0 || (mime != NULL && st.st_size != size))
 	{
-		for (; nrows > 0; nrows--)
-		{
-			if (quitting) break;
-
-			struct stat st;
-			char *path = result[2 * nrows];
-			// file doesn't exist anymore or is not accessible, remove
-			if (stat(path, &st) != 0)
-			{
-				int is_directory = atoi(result[2 * nrows + 1]) == 0;
-				if (is_directory)
-					notify_event_remove_directory(path);
-				else
-					notify_event_remove_file(path);
-			}
-		}
-		sqlite3_free_table(result);
+		if (mime == NULL)
+			notify_event_remove_directory(path);
+		else
+			notify_event_remove_file(path);
 	}
-	sqlite3_free(sql);
+
+	return 0;
+}
+
+static void
+scan_for_removed_files()
+{
+	char *errmsg;
+	
+	int ret = sqlite3_exec(db, "SELECT PATH, SIZE, MIME from DETAILS where PATH NOT NULL and MIME IS NULL", remove_entry_callback, NULL, &errmsg);
+	if (ret != SQLITE_OK)
+	{
+		DPRINTF(E_MAXDEBUG, L_SCANNER, "SQL error on removing directories: %s\n", errmsg);
+		sqlite3_free(errmsg);
+	}
+
+	ret = sqlite3_exec(db, "SELECT PATH, SIZE, MIME from DETAILS where PATH NOT NULL and MIME IS NOT NULL", remove_entry_callback, NULL, &errmsg);
+	if (ret != SQLITE_OK)
+	{
+		DPRINTF(E_MAXDEBUG, L_SCANNER, "SQL error on removing files: %s\n", errmsg);
+		sqlite3_free(errmsg);
+	}
 }
 
 static void
@@ -1040,7 +1052,7 @@ scan_for_added_files(const char *root_dir, media_types dir_types)
 		else if (type == TYPE_FILE && lstat(path, &st) == 0)
 		{
 			const char *timestamp_table = get_table_for_timestamp_check(name, path);
-			if (sql_get_int_field(db, "SELECT TIMESTAMP from %s where PATH = %Q", timestamp_table, path) != st.st_mtime)
+			if (sql_get_int_field(db, "SELECT TIMESTAMP from %s where PATH LIKE '%%%q'", timestamp_table, path) != st.st_mtime)
 			{
 				notify_event_insert_file(name, path, dir_types);
 			}
@@ -1060,9 +1072,9 @@ start_rescanner()
 	DPRINTF(E_DEBUG, L_SCANNER, "Rescanning media directores...\n");
 	init_scanner();
 
+	scan_for_removed_files();
 	for (media_path = media_dirs; media_path != NULL; media_path = media_path->next)
 	{
-		scan_for_removed_files(media_path->path);
 		scan_for_added_files(media_path->path, media_path->types);
 	}
 	

@@ -527,7 +527,7 @@ is_album_art(const char * name)
 	return (album_art_name ? 1 : 0);
 }
 
-int
+enum file_types
 resolve_unknown_type(const char * path, media_types dir_type)
 {
 	struct stat entry;

@@ -93,7 +93,7 @@ int is_playlist(const char * file);
 int is_caption(const char * file);
 int is_metadata(const char * file);
 int is_album_art(const char * name);
-int resolve_unknown_type(const char * path, media_types dir_type);
+enum file_types resolve_unknown_type(const char * path, media_types dir_type);
 enum file_types	resolve_file_type(const struct dirent* dirent, const char *path, media_types dir_types);
 const char *mime_to_ext(const char * mime);
 
