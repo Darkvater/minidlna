@@ -39,13 +39,16 @@ Features
 ==================
 
 - add new entries scanned from metadata: year, actors, director, (short/long) description, author, rating, studio
-- add support for tv series / shows with metadata: air date, season, episode, episode title
+- add support for tv series / shows with metadata: air date, studio, actors, season, episode, episode title
 - improve UPNP reply types for video mime-type for director, album art, episodes
-- present metadata for folders to support virtual tv show folders.
+- present metadata for folders to support virtual tv show folders and tv seasons
 - add option to ignore certain paths from scanning
 - add possibility to serve multiple-sized thumbnails based on client request
 - support additional video containers like 'Tv Shows' and 'Movies' if metadata is available
 - support scanning multiple captions for a media (use language suffix .ENG, .HUN, etc.)
   note: until there is a UI to support selection, only default caption will be returned which
   is either the one without language, or the first one if there is no language
-- new virtual containers, 'Tv Shows' and 'Movies'
+- support ignoring wildcard files/folders during scanning
+- support specifying ignore and albumart wildcards over multiple entries in the config
+- icons are read from data folder instead of compiled into binary
+- add periodic non-destructive rescan which detects removed and added media even if inotify is not working
