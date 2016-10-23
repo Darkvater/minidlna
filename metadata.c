@@ -434,8 +434,8 @@ add_nfo_from_parent(const char *parentID, metadata_t *m)
 	free(my_parentID);
 }
 
-int
-add_entry_to_details(const char *path, size_t entry_size, time_t entry_timestamp, metadata_t *m, int64_t album_art_id)
+static int
+add_entry_to_details(const char *path, off_t entry_size, time_t entry_timestamp, metadata_t *m, int64_t album_art_id)
 {
 	int ret = sql_exec(db, "INSERT into DETAILS"
 	                       " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
