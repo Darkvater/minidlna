@@ -1469,7 +1469,7 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 	const image_size_type_t *image_size_type = get_image_size_type((image_size_type_enum)size_type);
 	albumart_path = get_path_from_image_size_type(path, image_size_type);
 
-	int fd = _open_file(path);
+	int fd = _open_file(albumart_path);
 	if (fd < 0) {
 		DPRINTF(E_DEBUG, L_HTTP, "Album art doesn't exist in cache, adding new entry %s\n", albumart_path);
 #if USE_FORK
