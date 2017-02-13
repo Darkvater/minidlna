@@ -379,7 +379,6 @@ rescan:
 			free(children);
 			log_close();
 			freeoptions();
-			free(children);
 			exit(EXIT_SUCCESS);
 		}
 		else if (*scanner_pid < 0)
