@@ -601,7 +601,7 @@ GetAudioMetadata(const char *path, char *name)
 	struct song_metadata song;
 	metadata_t m;
 	uint32_t free_flags = FLAG_MIME|FLAG_DURATION|FLAG_DLNA_PN|FLAG_DATE;
-	memset(&m, '\0', sizeof(metadata_t));
+	memset(&m, 0, sizeof(m));
 
 	if ( stat(path, &file) != 0 )
 		return 0;
@@ -761,6 +761,17 @@ GetAudioMetadata(const char *path, char *name)
 			free_flags |= FLAG_COMMENT;
 			m.comment = esc_tag;
 		}
+	}
+
+	m.channels = song.channels;
+	m.bitrate = song.bitrate;
+	m.frequency = song.samplerate;
+	m.disc = song.disc;
+	m.track = song.track;
+	if ( song.mime )
+	{
+		free(m.mime);
+		m.mime = strdup(song.mime);
 	}
 
 	album_art = find_album_art(path, song.image, song.image_size);
