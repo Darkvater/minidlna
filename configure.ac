@@ -267,23 +267,12 @@ dnl # WavPack library
 dnl ################################################
 
 AS_IF([test "x$enable_wavpack" != "xno"],
-	[
-		PKG_CHECK_MODULES([WAVPACK], [wavpack >= 5.0.0], [have_wavpack=yes], [have_wavpack=no])
-	],
+	[PKG_CHECK_MODULES([WAVPACK], [wavpack >= 5.0.0], [have_wavpack=yes], [have_wavpack=no])],
 	[have_wavpack=no])
 
 AS_IF([test "x$have_wavpack" != "xno"],
-	[
-		AC_DEFINE([HAVE_WAVPACK], [1], [Define for Wavpack support])
-		CFLAGS="$CFLAGS $WAVPACK_CFLAGS"
-		LDFLAGS="$LDFLAGS $WAVPACK_LIBS"
-		
-	],	
-	[
-		AS_IF([test "x$enable_wavpack" = "xyes"],
-			[AC_MSG_ERROR([Wavpack not found or not usable])])
-	]
-)
+	[AC_DEFINE([HAVE_WAVPACK], [1], [Define for Wavpack support])],	
+	[AS_IF([test "x$enable_wavpack" = "xyes"],[AC_MSG_ERROR([Wavpack not found or not usable])])])
 
 CFLAGS_SAVE="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
