@@ -648,6 +648,13 @@ GetAudioMetadata(const char *path, char *name)
 		strcpy(type, "pcm");
 		m.mime = strdup("audio/L16");
 	}
+#ifdef HAVE_WAVPACK
+	else if ( ends_with(path, ".wv") )
+	{
+		strcpy(type, "wv");
+		m.mime = strdup("audio/x-wavpack");
+	}
+#endif
 	else
 	{
 		DPRINTF(E_WARN, L_METADATA, "Unhandled file extension on %s\n", path);

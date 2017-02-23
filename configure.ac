@@ -14,7 +14,7 @@
 # License along with MiniDLNA; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA.
-AC_INIT(MiniDLNA,1.1.3,,minidlna)
+AC_INIT(MiniDLNA,1.1.6,,minidlna)
 #LT_INIT
 
 AC_CANONICAL_TARGET
@@ -37,6 +37,8 @@ AM_PROG_CC_C_O
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
+
+PKG_PROG_PKG_CONFIG
 
 # Default string definitions
 AC_DEFINE_UNQUOTED([OS_URL],"http://sourceforge.net/projects/minidlna/",[OS URL])
@@ -149,6 +151,12 @@ AC_COMPILE_IFELSE(
 AC_CHECK_HEADER(linux/netlink.h,
     [AC_DEFINE([HAVE_NETLINK],[1],[Support for Linux netlink])], [], [#include <sys/socket.h>])
 
+###############################################################################################################
+### Configure switches
+
+AC_ARG_ENABLE([wavpack],
+              [AS_HELP_STRING([--enable-wavpack], [Enable support for Wavpack files (default=auto)])])
+
 ################################################################################################################
 ### Library checks
 
@@ -253,6 +261,29 @@ test x"$ac_cv_header_id3tag_h" != x"yes" && AC_MSG_ERROR([libid3tag headers not 
 test x"$ac_cv_header_ogg_ogg_h" != x"yes" && AC_MSG_ERROR([libogg headers not found or not usable])
 test x"$ac_cv_header_vorbis_codec_h" != x"yes" && AC_MSG_ERROR([libvorbis headers not found or not usable])
 test x"$ac_cv_header_FLAC_metadata_h" != x"yes" && AC_MSG_ERROR([libFLAC headers not found or not usable])
+
+dnl ################################################
+dnl # WavPack library
+dnl ################################################
+
+AS_IF([test "x$enable_wavpack" != "xno"],
+	[
+		PKG_CHECK_MODULES([WAVPACK], [wavpack >= 5.0.0], [have_wavpack=yes], [have_wavpack=no])
+	],
+	[have_wavpack=no])
+
+AS_IF([test "x$have_wavpack" != "xno"],
+	[
+		AC_DEFINE([HAVE_WAVPACK], [1], [Define for Wavpack support])
+		CFLAGS="$CFLAGS $WAVPACK_CFLAGS"
+		LDFLAGS="$LDFLAGS $WAVPACK_LIBS"
+		
+	],	
+	[
+		AS_IF([test "x$enable_wavpack" = "xyes"],
+			[AC_MSG_ERROR([Wavpack not found or not usable])])
+	]
+)
 
 CFLAGS_SAVE="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"

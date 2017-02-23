@@ -40,6 +40,9 @@
 #ifdef HAVE_ICONV
 #include <iconv.h>
 #endif
+#ifdef HAVE_WAVPACK
+#include <wavpack/wavpack.h>
+#endif
 #include <sqlite3.h>
 #include "tagutils.h"
 #include "../metadata.h"
@@ -107,6 +110,9 @@ char *winamp_genre[] = {
 #include "tagutils-asf.h"
 #include "tagutils-wav.h"
 #include "tagutils-pcm.h"
+#ifdef HAVE_WAVPACK
+#include "tagutils-wv.h"
+#endif
 
 static int _get_tags(char *file, struct song_metadata *psong);
 static int _get_fileinfo(char *file, struct song_metadata *psong);
@@ -130,6 +136,9 @@ static taghandler taghandlers[] = {
 	{ "asf", 0,            _get_asffileinfo                                  },
 	{ "wav", _get_wavtags, _get_wavfileinfo                                  },
 	{ "pcm", 0,            _get_pcmfileinfo                                  },
+#ifdef HAVE_WAVPACK
+	{ "wv",  _get_wvtags,  _get_wvfileinfo					 },
+#endif
 	{ NULL,  0 }
 };
 
@@ -145,6 +154,9 @@ static taghandler taghandlers[] = {
 #include "tagutils-wav.c"
 #include "tagutils-pcm.c"
 #include "tagutils-plist.c"
+#ifdef HAVE_WAVPACK
+#include "tagutils-wv.c"
+#endif
 
 //*********************************************************************************
 // freetags()
