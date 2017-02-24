@@ -37,7 +37,7 @@
 #include "log.h"
 
 int
-xasprintf(char **strp, char *fmt, ...)
+xasprintf(char **strp, const char *fmt, ...)
 {
 	va_list args;
 	int ret;
