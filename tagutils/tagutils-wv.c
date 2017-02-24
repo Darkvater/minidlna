@@ -182,7 +182,7 @@ static int _get_wvtags(char *filename, struct song_metadata *psong)
 	char *item = NULL, *value = NULL;
 
 	error = (char*)malloc(80+1);
-	ctx = WavpackOpenFileInput(filename, error, OPEN_TAGS|OPEN_NO_CHECKSUM, 0); 
+	ctx = WavpackOpenFileInput(filename, error, OPEN_TAGS|OPEN_DSD_NATIVE|OPEN_NO_CHECKSUM, 0); 
 
 	if(!ctx)
 	{
