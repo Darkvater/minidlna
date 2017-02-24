@@ -192,6 +192,7 @@ static const struct argument GetProtocolInfoArgs[] =
 	{NULL, 0, 0}
 };
 
+/*
 static const struct argument PrepareForConnectionArgs[] =
 {
 	{"RemoteProtocolInfo", 1, 6},
@@ -209,6 +210,7 @@ static const struct argument ConnectionCompleteArgs[] =
 	{"ConnectionID", 1, 7},
 	{NULL, 0, 0}
 };
+*/
 
 static const struct argument GetCurrentConnectionIDsArgs[] =
 {

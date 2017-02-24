@@ -247,7 +247,7 @@ GetProtocolInfo(struct upnphttp * h, const char * action)
 	char * body;
 	int bodylen;
 
-	bodylen = asprintf(&body, resp,
+	bodylen = xasprintf(&body, resp,
 		action, "urn:schemas-upnp-org:service:ConnectionManager:1",
 		action);	
 	BuildSendAndCloseSoapResp(h, body, bodylen);
@@ -943,7 +943,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 			/* LG hack: subtitles won't get used unless dc:title contains a dot. */
 			else if( passed_args->client == ELGDevice && (passed_args->flags & FLAG_HAS_CAPTIONS) )
 			{
-				ret = asprintf(&alt_title, "%s.", title);
+				ret = xasprintf(&alt_title, "%s.", title);
 				if( ret > 0 )
 					title = alt_title;
 				else
@@ -1884,7 +1884,7 @@ SearchContentDirectory(struct upnphttp * h, const char * action)
 		if ( SortCriteria )
 			orderBy = parse_sort_criteria(SortCriteria, &ret);
 		else
-			asprintf(&orderBy, "order by d.TITLE COLLATE naturalsort");
+			ret = xasprintf(&orderBy, "order by d.TITLE COLLATE naturalsort");
 
 	/* If it's a DLNA client, return an error for bad sort criteria */
 	if( ret < 0 && ((args.flags & FLAG_DLNA) || GETFLAG(DLNA_STRICT_MASK)) )
