@@ -496,7 +496,7 @@ static void read_file(img_t* img, const char* dir, const char *filename) {
 		perror(err);
 		exit(EXIT_FAILURE);
 	}
-	fseek( file , 0L , SEEK_END);
+	fseek(file , 0L , SEEK_END);
 	img->size = ftell( file );
 	rewind( file );
 
@@ -505,7 +505,7 @@ static void read_file(img_t* img, const char* dir, const char *filename) {
 		perror("read_file(): failed to allocate memory");
 		exit(EXIT_FAILURE);
 	}
-	fread(img->data, sizeof(char), img->size, file);
+	(void)fread(img->data, sizeof(char), img->size, file);
 	fclose(file);
 }
 
