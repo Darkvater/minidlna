@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static inline void _wv_assign_tag_value( char **field, const char* value)
+static inline void _wv_assign_tag_value(char **field, const char* value)
 {
 	if (!*field)
 	{
@@ -31,89 +31,99 @@ static inline void _wv_assign_tag_value( char **field, const char* value)
 	}
 }
 
-static void _wv_add_tag(struct song_metadata *psong, const char* item, const char* value, size_t value_len)
+static void _wv_extract_fraction(int* pnominator, int *pdenominator, const char* value)
 {
-	if (!strncmp(item, "ALBUM", 5))
+	const char* div = strchr(value, '/');
+	if (div)
 	{
-		_wv_assign_tag_value(&psong->album, value);
-	}
-	else if (!strncmp(item, "ARTIST", 6) )
-	{
-		_wv_assign_tag_value(&psong->contributor[ROLE_ARTIST], value);
-	}
-	else if (!strncmp(item, "ARTISTSORT", 10) )
-        {
-                _wv_assign_tag_value(&psong->contributor_sort[ROLE_ARTIST], value);
-        }
-
-        else if (!strncmp(item, "COMPOSER", 8) )
-        {
-                _wv_assign_tag_value(&psong->contributor[ROLE_COMPOSER], value);
-        }
-        else if (!strncmp(item, "CONDUCTOR", 9) )
-        {
-                _wv_assign_tag_value(&psong->contributor[ROLE_CONDUCTOR], value);
-        }
-        else if(!strncmp(item, "ALBUMARTIST", 11))
-	{
-		_wv_assign_tag_value(&psong->contributor[ROLE_ALBUMARTIST], value);
-	}
-	else if(!strncmp(item, "ALBUMARTISTSORT", 15))
-        {
-                _wv_assign_tag_value(&psong->contributor_sort[ROLE_ALBUMARTIST], value);
-        }
-	else if(!strncmp(item, "TITLE", 5))
-	{
-		_wv_assign_tag_value(&psong->title, value);
-	}
-	else if(!strncmp(item, "TRACKNUMBER", 11))
-	{
-		psong->track = atoi(value);
-	}
-	else if(!strncmp(item, "DISCNUMBER", 10))
-	{
-		// <disc>/<total discs>
-		const char* div = strchr(value, '/');
-		if (div)
+		char* nominator = strndup(value, div-value);
+		if (nominator)
 		{
-			char *disc = strndup(value, div-value);
-			if (disc)
-			{
-				psong->disc = atoi(disc);
-				psong->total_discs = atoi(disc+1);
-			}
-			free(disc);
+			*pnominator = atoi(nominator);
+			*pdenominator = atoi(div+1);
+			free(nominator);
 		}
 		else
 		{
-			psong->disc = atoi(value);
+			*pnominator = *pdenominator = 0;
 		}
 	}
-	else if(!strncmp(item, "GENRE", 5))
+	else
+	{
+		*pnominator = atoi(value);
+		*pdenominator = 0;
+	}
+}
+
+static void _wv_add_tag(struct song_metadata *psong, const char* item, const char* value, size_t value_len)
+{
+	if (!strcasecmp(item, "ALBUM"))
+	{
+		_wv_assign_tag_value(&psong->album, value);
+	}
+	else if (!strcasecmp(item, "ARTIST") )
+	{
+		_wv_assign_tag_value(&psong->contributor[ROLE_ARTIST], value);
+	}
+	else if (!strcasecmp(item, "ARTISTSORT") )
+        {
+                _wv_assign_tag_value(&psong->contributor_sort[ROLE_ARTIST], value);
+        }
+        else if (!strcasecmp(item, "COMPOSER") )
+        {
+                _wv_assign_tag_value(&psong->contributor[ROLE_COMPOSER], value);
+        }
+        else if (!strcasecmp(item, "CONDUCTOR") )
+        {
+                _wv_assign_tag_value(&psong->contributor[ROLE_CONDUCTOR], value);
+        }
+        else if(!strcasecmp(item, "ALBUMARTIST"))
+	{
+		_wv_assign_tag_value(&psong->contributor[ROLE_BAND], value);
+	}
+	else if(!strcasecmp(item, "ALBUMARTISTSORT"))
+        {
+                _wv_assign_tag_value(&psong->contributor_sort[ROLE_BAND], value);
+        }
+	else if(!strcasecmp(item, "TITLE"))
+	{
+		_wv_assign_tag_value(&psong->title, value);
+	}
+	else if(!strcasecmp(item, "TRACK"))
+	{
+		// <track>/<total tracks>
+		_wv_extract_fraction(&psong->track, &psong->total_tracks, value);
+	}
+	else if(!strcasecmp(item, "DISC"))
+	{
+		// <disc>/<total discs>
+		_wv_extract_fraction(&psong->disc, &psong->total_discs, value);
+	}
+	else if(!strcasecmp(item, "GENRE"))
 	{
 		_wv_assign_tag_value(&psong->genre, value);
 	}
-	else if (!strncmp(item, "COMMENT", 7) || !strncmp(item, "DESCRIPION", 10))
+	else if (!strcasecmp(item, "COMMENT") || !strcasecmp(item, "DESCRIPION"))
 	{
 		_wv_assign_tag_value(&psong->comment, value);
 	}
-	else if(!strncmp(item, "MUSICBRAINZ_ALBUMID", 19))
+	else if(!strcasecmp(item, "MUSICBRAINZ_ALBUMID"))
 	{
 		_wv_assign_tag_value(&psong->musicbrainz_albumid, value);
 	}
-	else if(!strncmp(item, "MUSICBRAINZ_TRACKID", 19))
+	else if(!strcasecmp(item, "MUSICBRAINZ_TRACKID"))
 	{
 		_wv_assign_tag_value(&psong->musicbrainz_trackid, value);
 	}
-	else if(!strncmp(item, "MUSICBRAINZ_ARTISTID", 20))
+	else if(!strcasecmp(item, "MUSICBRAINZ_ARTISTID"))
 	{
 		_wv_assign_tag_value(&psong->musicbrainz_artistid, value);
 	}
-	else if(!strncmp(item, "MUSICBRAINZ_ALBUMARTISTID", 25))
+	else if(!strcasecmp(item, "MUSICBRAINZ_ALBUMARTISTID"))
 	{
 		_wv_assign_tag_value(&psong->musicbrainz_albumartistid, value);
 	}
-	else if(!strncmp(item, "DATE", 4))
+	else if(!strcasecmp(item, "DATE") || !strcasecmp(item, "YEAR"))
 	{
 		char *year = NULL;
 
@@ -136,24 +146,21 @@ static void _wv_add_tag(struct song_metadata *psong, const char* item, const cha
 	}
 }
 
-static void _wv_add_mtag(struct song_metadata *psong, const char* item, const char* values, int values_len)
+static void _wv_add_mtag(struct song_metadata *psong, const char* item, char* values, int values_len)
 {
-	int clen = 0, len;
-	while(clen < values_len)
+	int i;
+
+	// maybe many strings
+	for(i=0; i<values_len; ++i)
 	{
-		len = strlen(values);
-		if (len)
-		{
-			_wv_add_tag(psong, item, values, len);
-		}
-		clen += len + 1;
-		values += len + 1;
+		if (!values[i]) values[i] = ';';
 	}
+	_wv_add_tag(psong, item, values, values_len);
 }
 
 static void _wv_add_binary_tag(struct song_metadata *psong, const char* item, const char* value, int value_len)
 {
-	if (!strncmp(item, "COVER", 5) || !strncmp(item, "FRONT", 5))
+	if (!strcasecmp(item, "COVER") || !strcasecmp(item, "FRONT") || !strcasecmp(item, "COVER ART (FRONT)"))
 	{
 		if (!psong->image)
 		{
@@ -165,8 +172,7 @@ static void _wv_add_binary_tag(struct song_metadata *psong, const char* item, co
 	}
 }
 
-static int
-_get_wvtags(char *filename, struct song_metadata *psong)
+static int _get_wvtags(char *filename, struct song_metadata *psong)
 {
 	WavpackContext *ctx = NULL;
 	char *error = NULL;
@@ -197,9 +203,24 @@ _get_wvtags(char *filename, struct song_metadata *psong)
 		if (psong->song_length) psong->bitrate = (((uint64_t)(psong->file_size) * 1000) / (psong->song_length / 8));
 	}
 
+	if (WavpackGetMode(ctx) & MODE_LOSSLESS)
+	{
+		psong->lossless = 1;
+	}
+	else
+	{
+		psong->lossless = 0;
+	}
+
+	if (!(WavpackGetMode(ctx) & MODE_VALID_TAG))
+	{
+		DPRINTF(E_WARN, L_SCANNER, "%s contains no valid tags\n", filename);
+		goto _exit;
+	}
+
 	num_tag_items = WavpackGetNumTagItems(ctx);
         item_len = 20;
-	value_len = 100;
+	value_len = 200;
 	item = (char*)malloc(item_len+1);
 	value = (char*)malloc(value_len+1);
 
@@ -215,7 +236,7 @@ _get_wvtags(char *filename, struct song_metadata *psong)
 			item_len = len;
 		}
 
-		len = WavpackGetTagItemIndexed(ctx, i, item, item_len);
+		len = WavpackGetTagItemIndexed(ctx, i, item, item_len+1);
 		if (!len) continue;
 		
 		len = WavpackGetTagItem(ctx, item, NULL, 0);
@@ -228,7 +249,7 @@ _get_wvtags(char *filename, struct song_metadata *psong)
 			value_len = len;
 		}
 
-		len = WavpackGetTagItem(ctx, item, value, value_len);
+		len = WavpackGetTagItem(ctx, item, value, value_len+1);
 		if (!len) continue;
 
 		// add item
@@ -249,7 +270,7 @@ _get_wvtags(char *filename, struct song_metadata *psong)
 			item_len = len;
 		}
 
-		len = WavpackGetBinaryTagItemIndexed(ctx, i, item, item_len);
+		len = WavpackGetBinaryTagItemIndexed(ctx, i, item, item_len+1);
 		if (!len) continue;
 		
 		len = WavpackGetBinaryTagItem(ctx, item, NULL, 0);
@@ -278,11 +299,8 @@ _get_wvtags(char *filename, struct song_metadata *psong)
 	return err;
 }
 
-static int
-_get_wvfileinfo(char *filename, struct song_metadata *psong)
+static int _get_wvfileinfo(char *filename, struct song_metadata *psong)
 {
-	psong->lossless = 1;
 	psong->vbr_scale = 1;
-
 	return 0;
 }
