@@ -237,6 +237,9 @@ GetProtocolInfo(struct upnphttp * h, const char * action)
 		"xmlns:u=\"%s\">"
 		"<Source>"
 		RESOURCE_PROTOCOL_INFO_VALUES
+#ifdef HAVE_WAVPACK
+		",http-get:*:audio/x-wavpack:*"
+#endif
 		"</Source>"
 		"<Sink></Sink>"
 		"</u:%sResponse>";
