@@ -18,7 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static inline void _wv_assign_tag_value(char **field, const char* value)
+static inline void _wv_assign_tag_value(char **field, const char *value)
 {
 	if (!*field)
 	{
@@ -31,7 +31,7 @@ static inline void _wv_assign_tag_value(char **field, const char* value)
 	}
 }
 
-static void _wv_extract_fraction(int* pnominator, int *pdenominator, const char* value)
+static void _wv_extract_fraction(int *pnominator, int *pdenominator, const char *value)
 {
 	const char* div = strchr(value, '/');
 	if (div)
@@ -55,7 +55,7 @@ static void _wv_extract_fraction(int* pnominator, int *pdenominator, const char*
 	}
 }
 
-static void _wv_add_tag(struct song_metadata *psong, const char* item, const char* value, size_t value_len)
+static void _wv_add_tag(struct song_metadata *psong, const char *item, const char *value, size_t value_len)
 {
 	if (!strcasecmp(item, "ALBUM"))
 	{
@@ -146,19 +146,22 @@ static void _wv_add_tag(struct song_metadata *psong, const char* item, const cha
 	}
 }
 
-static void _wv_add_mtag(struct song_metadata *psong, const char* item, char* values, int values_len)
+static void _wv_add_mtag(struct song_metadata *psong, const char *item, char *values, int values_len)
 {
-	int i;
-
-	// maybe many strings
-	for(i=0; i<values_len; ++i)
+	if (values_len>0)
 	{
-		if (!values[i]) values[i] = ';';
+		int i;
+
+		// maybe many strings
+		for(i=0; i<values_len; ++i)
+		{
+			if (!values[i]) values[i] = ';';
+		}
+		_wv_add_tag(psong, item, values, values_len);
 	}
-	_wv_add_tag(psong, item, values, values_len);
 }
 
-static void _wv_add_binary_tag(struct song_metadata *psong, const char* item, const char* value, int value_len)
+static void _wv_add_binary_tag(struct song_metadata *psong, const char *item, const char *value, int value_len)
 {
 	if (!strcasecmp(item, "COVER") || !strcasecmp(item, "FRONT") || !strcasecmp(item, "COVER ART (FRONT)"))
 	{
@@ -182,9 +185,9 @@ static int _get_wvtags(char *filename, struct song_metadata *psong)
 	char *item = NULL, *value = NULL;
 
 	error = (char*)malloc(80+1);
-	ctx = WavpackOpenFileInput(filename, error, OPEN_TAGS|OPEN_DSD_NATIVE|OPEN_NO_CHECKSUM, 0); 
+	ctx = WavpackOpenFileInput(filename, error, OPEN_WVC|OPEN_TAGS|OPEN_DSD_NATIVE|OPEN_NO_CHECKSUM, 0); 
 
-	if(!ctx)
+	if (!ctx)
 	{
 		DPRINTF(E_ERROR, L_SCANNER, "Cannot extract tag from %s [%s]\n", filename, error);
 		err = -1;
@@ -200,17 +203,10 @@ static int _get_wvtags(char *filename, struct song_metadata *psong)
         	unsigned int sec = (unsigned int)(total_samples / sample_rate);
         	unsigned int ms = (unsigned int)(((total_samples % sample_rate) * 1000) / sample_rate);
 		psong->song_length = (sec * 1000) + ms;
-		if (psong->song_length) psong->bitrate = (((uint64_t)(psong->file_size) * 1000) / (psong->song_length / 8));
 	}
 
-	if (WavpackGetMode(ctx) & MODE_LOSSLESS)
-	{
-		psong->lossless = 1;
-	}
-	else
-	{
-		psong->lossless = 0;
-	}
+	psong->bitrate = (int)WavpackGetAverageBitrate(ctx, (WavpackGetMode(ctx) & MODE_WVC) != 0);
+	psong->lossless = ((WavpackGetMode(ctx) & MODE_LOSSLESS) != 0);
 
 	if (!(WavpackGetMode(ctx) & MODE_VALID_TAG))
 	{
@@ -218,12 +214,12 @@ static int _get_wvtags(char *filename, struct song_metadata *psong)
 		goto _exit;
 	}
 
-	num_tag_items = WavpackGetNumTagItems(ctx);
         item_len = 20;
 	value_len = 200;
 	item = (char*)malloc(item_len+1);
 	value = (char*)malloc(value_len+1);
 
+	num_tag_items = WavpackGetNumTagItems(ctx);
 	for(i=0; i<num_tag_items; ++i)
 	{
 		len = WavpackGetTagItemIndexed(ctx, i, NULL, 0);
@@ -257,7 +253,6 @@ static int _get_wvtags(char *filename, struct song_metadata *psong)
 	}
 
 	num_tag_items = WavpackGetNumBinaryTagItems(ctx);
-
 	for(i=0; i<num_tag_items; ++i)
 	{
 		len = WavpackGetBinaryTagItemIndexed(ctx, i, NULL, 0);
@@ -288,10 +283,25 @@ static int _get_wvtags(char *filename, struct song_metadata *psong)
 
 		// add item 		
 		_wv_add_binary_tag(psong, item, value, len);
-	}	
+	}
+
+	if (psong->title)
+	{
+		unsigned char fmt = WavpackGetFileFormat(ctx);
+		if (fmt == WP_FORMAT_DFF || fmt == WP_FORMAT_DSF)
+		{ // DSD
+			char *dst_title = NULL;
+			int res = xasprintf(&dst_title, "%s [DSD]", psong->title);
+			if (res)
+			{
+				free(psong->title);
+				psong->title = dst_title;
+			}
+		}
+	}
 
  _exit:
-	if(ctx) WavpackCloseFile(ctx);
+	if (ctx) WavpackCloseFile(ctx);
 	free(error);
 	free(item);
 	free(value);
