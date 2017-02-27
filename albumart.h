@@ -36,6 +36,7 @@ typedef struct
 {
 	image_size_type_enum type;
 	const char* name;
+	const char* short_name;
 	int width;
 	int height;
 } image_size_type_t;

@@ -25,12 +25,8 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/param.h>
-#include <limits.h>
 #include <libgen.h>
-#include <setjmp.h>
 #include <errno.h>
-
-#include <jpeglib.h>
 
 #include "upnpglobalvars.h"
 #include "albumart.h"
@@ -39,11 +35,11 @@
 #include "image_utils.h"
 #include "log.h"
 
-image_size_type_t image_size_types[] = {
-	{ JPEG_TN, "JPEG_TN", 160, 160 },
-	{ JPEG_SM, "JPEG_SM", 640, 480 },
-	{ JPEG_MED, "JPEG_MED", 1024, 768 },
-	{ JPEG_LRG, "JPEG_LRG", 4096, 4096 },
+static const image_size_type_t image_size_types[] = {
+	{ JPEG_TN, "JPEG_TN", "tn", 160, 160 },
+	{ JPEG_SM, "JPEG_SM", "sm", 640, 480 },
+	{ JPEG_MED, "JPEG_MED", "med", 1024, 768 },
+	{ JPEG_LRG, "JPEG_LRG", "lrg", 4096, 4096 },
 	{ JPEG_INV, "", 0, 0 }
 };
 
@@ -73,9 +69,10 @@ char *get_path_from_image_size_type(const char *path, const image_size_type_t *i
 	if (dot_pos)
 	{
 		size_t we_len = dot_pos-path;
-		we_path = strndup( path, we_len);
+		we_path = strndup(path, we_len);
 	}
-        xasprintf(&albumart_path, "%s.%s.jpg", we_path? we_path : path, image_size_type->name);
+
+        xasprintf(&albumart_path, "%s.%s.jpg", we_path? we_path : path, image_size_type->short_name);
 	free(we_path);
         return albumart_path;
     }
@@ -86,7 +83,7 @@ art_cache_exists(const char *orig_path, char **cache_file)
 {
 	char* dot_pos;
     
-	if( xasprintf(cache_file, "%s/art_cache%sxxxx", db_path, orig_path) < 0 )
+	if(xasprintf(cache_file, "%s/art_cache%sxxxx", db_path, orig_path) < 0)
 		return 0;
     
 	dot_pos = strrchr(*cache_file, '.');
@@ -165,7 +162,7 @@ save_resized_album_art_from_imsrc(const image_s *imsrc, const char *path, const 
 
 	int ret = save_resized_album_art_from_imsrc_to(imsrc, path, dst_file, image_size_type);
 	free(dst_file);
-	if (ret != 0)
+	if (ret)
 	{
 		free(cache_file);
 		cache_file = NULL;
@@ -263,7 +260,7 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 		art_cache_exists(path, &art_path);
 
 		int ret = link_file(last_path, art_path);
-		if (ret == 0)
+		if (!ret)
 		{
 			imsrc = image_new_from_jpeg(NULL, 0, image_data, image_size, 1, ROTATE_NONE);
 			goto save_resized;
@@ -345,7 +342,7 @@ check_for_album_file(const char *path, char **original_album_art_location)
 			}
 		}
 	}
-	if (ret == 0) goto add_cached_image;
+	if (!ret) goto add_cached_image;
 
 check_dir:
 	/* Then fall back to possible generic cover art file names */
@@ -371,13 +368,13 @@ add_cached_image:
 			thumb = save_resized_album_art_from_imsrc(imsrc, file, get_image_size_type(JPEG_TN));
 			image_free(imsrc);
 			free(thumb);
-            
-            if (ret)
-            {
-                free(cache_file);
-                cache_file = NULL;
-            }
-            return cache_file;
+
+			if (ret)
+			{
+				free(cache_file);
+				cache_file = NULL;
+			}
+			return cache_file;
 		}
 	}
 
@@ -398,7 +395,7 @@ find_album_art(const char *path, uint8_t *image_data, int image_size)
 		if (lstat(album_art_cache, &st) != 0) return 0;
 
 	int64_t ret = sql_get_int64_field(db, "SELECT ID from ALBUM_ART where PATH = %Q", album_art_cache);
-	if (ret == 0)
+	if (!ret)
 	{
 		if (sql_exec(db, "INSERT into ALBUM_ART (PATH, TIMESTAMP) VALUES (%Q, %d)", album_art_cache, st.st_mtime) == SQLITE_OK)
 		{
