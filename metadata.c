@@ -704,12 +704,7 @@ GetAudioMetadata(const char *path, char *name)
 		if( song.contributor[i] && *song.contributor[i] )
 		{
 			m.creator = trim(song.contributor[i]);
-			if( strlen(m.creator) > 48 )
-			{
-				m.creator = strdup("Various Artists");
-				free_flags |= FLAG_CREATOR;
-			}
-			else if( (esc_tag = escape_tag(m.creator, 0)) )
+			if( (esc_tag = escape_tag(m.creator, 0)) )
 			{
 				m.creator = esc_tag;
 				free_flags |= FLAG_CREATOR;
@@ -730,12 +725,7 @@ GetAudioMetadata(const char *path, char *name)
 	        if( i <= ROLE_BAND )
 		{
 			m.artist = trim(song.contributor[i]);
-			if( strlen(m.artist) > 48 )
-			{
-				m.artist = strdup("Various Artists");
-				free_flags |= FLAG_ARTIST;
-			}
-			else if( (esc_tag = escape_tag(m.artist, 0)) )
+			if( (esc_tag = escape_tag(m.artist, 0)) )
 			{
 				m.artist = esc_tag;
 				free_flags |= FLAG_ARTIST;
