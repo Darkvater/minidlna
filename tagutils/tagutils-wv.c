@@ -125,24 +125,7 @@ static void _wv_add_tag(struct song_metadata *psong, const char *item, const cha
 	}
 	else if(!strcasecmp(item, "DATE") || !strcasecmp(item, "YEAR"))
 	{
-		char *year = NULL;
-
-		if(value_len >= 10 &&
-		   isdigit(value[0]) && isdigit(value[1]) && ispunct(value[2]) &&
-		   isdigit(value[3]) && isdigit(value[4]) && ispunct(value[5]) &&
-		   isdigit(value[6]) && isdigit(value[7]) && isdigit(value[8]) && isdigit(value[9]))
-		{
-			year = strndup(value+6,4);
-			// nn-nn-yyyy
-		}
-		else
-		{
-			year = strndup(value, 4);
-			// year first. year is at most 4 digit.
-		}
-
-		if (year) psong->year = atoi(year);
-		free(year);
+		psong->year = extract_year(value, value_len);
 	}
 }
 
