@@ -78,15 +78,18 @@ _get_flctags(char *filename, struct song_metadata *psong)
 			break;
 #if FLAC_API_VERSION_CURRENT >= 10
 		case FLAC__METADATA_TYPE_PICTURE:
-			if (psong->image) {
-				DPRINTF(E_MAXDEBUG, L_SCANNER, "Ignoring additional image [%s]\n", filename);
-				break;
+			if (block->data.picture.type == FLAC__STREAM_METADATA_PICTURE_TYPE_FRONT_COVER || block->data.picture.type == FLAC__STREAM_METADATA_PICTURE_TYPE_OTHER)
+			{
+				if (psong->image) {
+					DPRINTF(E_MAXDEBUG, L_SCANNER, "Ignoring additional image [%s]\n", filename);
+					break;
+				}
+				psong->image_size = block->data.picture.data_length;
+				if((psong->image = malloc(psong->image_size)))
+					memcpy(psong->image, block->data.picture.data, psong->image_size);
+				else
+					DPRINTF(E_ERROR, L_SCANNER, "Out of memory [%s]\n", filename);
 			}
-			psong->image_size = block->data.picture.data_length;
-			if((psong->image = malloc(psong->image_size)))
-				memcpy(psong->image, block->data.picture.data, psong->image_size);
-			else
-				DPRINTF(E_ERROR, L_SCANNER, "Out of memory [%s]\n", filename);
 			break;
 #endif
 		default:
