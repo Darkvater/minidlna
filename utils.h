@@ -30,6 +30,14 @@
 
 #include "minidlnatypes.h"
 
+typedef struct
+{
+	const char* type;
+	const char* mime;
+} mime_info_t;
+
+typedef const mime_info_t *mime_info_ptr;
+
 /* String functions */
 /* We really want this one inlined, since it has a major performance impact */
 static inline int
@@ -96,6 +104,7 @@ int is_album_art(const char * name);
 enum file_types resolve_unknown_type(const char * path, media_types dir_type);
 enum file_types	resolve_file_type(const struct dirent* dirent, const char *path, media_types dir_types);
 const char *mime_to_ext(const char * mime);
+int ext_to_mime(const char *path, mime_info_ptr *mime_info);
 
 /* Others */
 int make_dir(char * path, mode_t mode);

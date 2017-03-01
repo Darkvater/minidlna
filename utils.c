@@ -408,6 +408,8 @@ mime_to_ext(const char * mime)
 				return "pcm";
 			else if( strcmp(mime+6, "3gpp") == 0 )
 				return "3gp";
+			else if( strcmp(mime+6, "ogg") == 0 )
+				return "ogg";
 			else if( strcmp(mime, "application/ogg") == 0 )
 				return "ogg";
 #ifdef HAVE_WAVPACK
@@ -454,6 +456,81 @@ mime_to_ext(const char * mime)
 	}
 	return "dat";
 }
+
+static const mime_info_t MI_MPEG = { "mp3", "audio/mpeg" };
+static const mime_info_t MI_MP4 = { "aac", "audio/mp4" };
+static const mime_info_t MI_3GPP_AUDIO = { "aac", "audio/3gpp" };
+static const mime_info_t MI_MS_WMA = { "asf", "audio/x-ms-wma" };
+static const mime_info_t MI_FLAC = { "flc", "audio/flac" };
+static const mime_info_t MI_WAV = { "wav", "audio/x-wav" };
+static const mime_info_t MI_OGG_AUDIO = { "ogg", "audio/ogg" };
+static const mime_info_t MI_L16 = { "pcm", "audio/L16" };
+#ifdef HAVE_WAVPACK
+static const mime_info_t MI_WAVPACK = { "wv", "audio/x-wavpack" };
+#endif
+
+int ext_to_mime(const char *path, mime_info_ptr *mime_info)
+{
+	const char* dot_pos = strrchr(path, '.');
+	if (dot_pos)
+	{
+		const char *slash_pos = strrchr(path, '/');
+		if (slash_pos > dot_pos) dot_pos = NULL;
+	}
+
+	if (!dot_pos)
+	{ // no file extension
+		return 0;
+	}
+
+	const char* ext = dot_pos + 1;
+
+	if( !strcasecmp(ext, "mp3") )
+	{
+		*mime_info = &MI_MPEG;
+	}
+	else if( !strcasecmp(ext, "m4a") || !strcasecmp(ext, "mp4") ||
+	         !strcasecmp(ext, "aac") || !strcasecmp(ext, "m4p") )
+	{
+		*mime_info = &MI_MP4;
+	}
+	else if( !strcasecmp(ext, "3gp") )
+	{
+		*mime_info = &MI_3GPP_AUDIO;
+	}
+	else if( !strcasecmp(ext, "wma") || !strcasecmp(ext, "asf") )
+	{
+		*mime_info = &MI_MS_WMA;
+	}
+	else if( !strcasecmp(ext, "flac") || !strcasecmp(ext, "fla") || !strcasecmp(ext, "flc") )
+	{
+		*mime_info = &MI_FLAC;
+	}
+	else if( !strcasecmp(ext, "wav") )
+	{
+		*mime_info = &MI_WAV;
+	}
+	else if( !strcasecmp(ext, "ogg") || !strcasecmp(ext, "oga") )
+	{
+		*mime_info = &MI_OGG_AUDIO;
+	}
+	else if( !strcasecmp(ext, "pcm") )
+	{
+		*mime_info = &MI_L16;
+	}
+#ifdef HAVE_WAVPACK
+	else if ( !strcasecmp(ext, "wv") )
+	{
+		*mime_info = &MI_WAVPACK;
+	}
+#endif
+	else
+	{
+		return 0;
+	}
+
+	return 1;
+} 
 
 int
 is_video(const char * file)

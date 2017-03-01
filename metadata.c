@@ -606,7 +606,7 @@ static void _assign_metadata_field(char **field, char *value, uint32_t *free_fla
 int64_t
 GetAudioMetadata(const char *path, char *name)
 {
-	const char *type;
+	mime_info_ptr mime_info;
 	static char lang[6] = { '\0' };
 	struct stat file;
 	int64_t ret;
@@ -622,59 +622,13 @@ GetAudioMetadata(const char *path, char *name)
 
 	strip_ext(name);
 
-	if( ends_with(path, ".mp3") )
-	{
-		type = "mp3";
-		m.mime = "audio/mpeg";
-	}
-	else if( ends_with(path, ".m4a") || ends_with(path, ".mp4") ||
-	         ends_with(path, ".aac") || ends_with(path, ".m4p") )
-	{
-		type = "aac";
-		m.mime = "audio/mp4";
-	}
-	else if( ends_with(path, ".3gp") )
-	{
-		type = "aac";
-		m.mime = "audio/3gpp";
-	}
-	else if( ends_with(path, ".wma") || ends_with(path, ".asf") )
-	{
-		type = "asf";
-		m.mime = "audio/x-ms-wma";
-	}
-	else if( ends_with(path, ".flac") || ends_with(path, ".fla") || ends_with(path, ".flc") )
-	{
-		type = "flc";
-		m.mime = "audio/x-flac";
-	}
-	else if( ends_with(path, ".wav") )
-	{
-		type = "wav";
-		m.mime = "audio/x-wav";
-	}
-	else if( ends_with(path, ".ogg") || ends_with(path, ".oga") )
-	{
-		type = "ogg";
-		m.mime = "audio/ogg";
-	}
-	else if( ends_with(path, ".pcm") )
-	{
-		type = "pcm";
-		m.mime = "audio/L16";
-	}
-#ifdef HAVE_WAVPACK
-	else if ( ends_with(path, ".wv") )
-	{
-		type = "wv";
-		m.mime = "audio/x-wavpack";
-	}
-#endif
-	else
+	if ( !ext_to_mime(path, &mime_info) )
 	{
 		DPRINTF(E_WARN, L_METADATA, "Unhandled file extension on %s\n", path);
 		return 0;
 	}
+
+	m.mime = (char*)mime_info->mime;
 
 	if( !(*lang) )
 	{
@@ -684,7 +638,7 @@ GetAudioMetadata(const char *path, char *name)
 			strncpyt(lang, getenv("LANG"), sizeof(lang));
 	}
 
-	if( readtags((char *)path, &song, &file, lang, type) != 0 )
+	if( readtags((char *)path, &song, &file, lang, mime_info->type) != 0 )
 	{
 		DPRINTF(E_WARN, L_METADATA, "Cannot extract tags from %s!\n", path);
         	freetags(&song);
