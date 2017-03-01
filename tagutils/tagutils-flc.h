@@ -19,5 +19,5 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static int _get_flcfileinfo(char *file, struct song_metadata *psong);
-static int _get_flctags(char *file, struct song_metadata *psong);
+static int _get_flcfileinfo(const char *file, struct song_metadata *psong);
+static int _get_flctags(const char *file, struct song_metadata *psong);

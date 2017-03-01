@@ -19,5 +19,5 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static int _get_wavfileinfo(char *file, struct song_metadata *psong);
-static int _get_wavtags(char *file, struct song_metadata *psong);
+static int _get_wavfileinfo(const char *file, struct song_metadata *psong);
+static int _get_wavtags(const char *file, struct song_metadata *psong);

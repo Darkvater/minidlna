@@ -352,4 +352,4 @@ typedef struct _asf_header_object_t {
 #define ASF_VT_QWORD            (4)
 #define ASF_VT_WORD             (5)
 
-static int _get_asffileinfo(char *file, struct song_metadata *psong);
+static int _get_asffileinfo(const char *file, struct song_metadata *psong);

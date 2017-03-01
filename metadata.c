@@ -588,71 +588,86 @@ GetFolderMetadata(const char *name, const char *path, const char *artist, const 
 	return ret;
 }
 
+static void _assign_metadata_field(char **field, char *value, uint32_t *free_flags, const uint32_t free_flag )
+{
+	if (value && *value)
+	{
+		char *esc_tag;
+
+		*field = trim(value);
+		if( (esc_tag = escape_tag(*field, 0)) )
+		{
+			*free_flags |= free_flag;
+			*field = esc_tag;
+		}
+	}
+}
+
 int64_t
 GetAudioMetadata(const char *path, char *name)
 {
-	char type[4];
+	const char *type;
 	static char lang[6] = { '\0' };
 	struct stat file;
 	int64_t ret;
-	char *esc_tag;
 	int i;
 	int64_t album_art = 0;
 	struct song_metadata song;
 	metadata_t m;
-	uint32_t free_flags = FLAG_MIME|FLAG_DURATION|FLAG_DLNA_PN|FLAG_DATE;
+	uint32_t free_flags = FLAG_DURATION|FLAG_DLNA_PN;
 	memset(&m, 0, sizeof(m));
 
 	if ( stat(path, &file) != 0 )
 		return 0;
+
 	strip_ext(name);
 
 	if( ends_with(path, ".mp3") )
 	{
-		strcpy(type, "mp3");
-		m.mime = strdup("audio/mpeg");
+		type = "mp3";
+		m.mime = "audio/mpeg";
 	}
 	else if( ends_with(path, ".m4a") || ends_with(path, ".mp4") ||
 	         ends_with(path, ".aac") || ends_with(path, ".m4p") )
 	{
-		strcpy(type, "aac");
-		m.mime = strdup("audio/mp4");
+		type = "aac";
+		m.mime = "audio/mp4";
 	}
 	else if( ends_with(path, ".3gp") )
 	{
-		strcpy(type, "aac");
-		m.mime = strdup("audio/3gpp");
+		type = "aac";
+		m.mime = "audio/3gpp";
 	}
 	else if( ends_with(path, ".wma") || ends_with(path, ".asf") )
 	{
-		strcpy(type, "asf");
-		m.mime = strdup("audio/x-ms-wma");
+		type = "asf";
+		m.mime = "audio/x-ms-wma";
 	}
 	else if( ends_with(path, ".flac") || ends_with(path, ".fla") || ends_with(path, ".flc") )
 	{
-		strcpy(type, "flc");
-		m.mime = strdup("audio/x-flac");
+		type = "flc";
+		m.mime = "audio/x-flac";
 	}
 	else if( ends_with(path, ".wav") )
 	{
-		strcpy(type, "wav");
-		m.mime = strdup("audio/x-wav");
+		type = "wav";
+		m.mime = "audio/x-wav";
 	}
 	else if( ends_with(path, ".ogg") || ends_with(path, ".oga") )
 	{
-		strcpy(type, "ogg");
-		m.mime = strdup("audio/ogg");
+		type = "ogg";
+		m.mime = "audio/ogg";
 	}
 	else if( ends_with(path, ".pcm") )
 	{
-		strcpy(type, "pcm");
-		m.mime = strdup("audio/L16");
+		type = "pcm";
+		m.mime = "audio/L16";
 	}
 #ifdef HAVE_WAVPACK
 	else if ( ends_with(path, ".wv") )
 	{
-		strcpy(type, "wv");
-		m.mime = strdup("audio/x-wavpack");
+		type = "wv";
+		m.mime = "audio/x-wavpack";
 	}
 #endif
 	else
@@ -679,36 +694,23 @@ GetAudioMetadata(const char *path, char *name)
 
 	if( song.dlna_pn )
 		m.dlna_pn = strdup(song.dlna_pn);
-	if( song.year )
-		xasprintf(&m.date, "%04d-01-01", song.year);
+
+	_assign_metadata_field(&m.date, song.date, &free_flags, FLAG_DATE);
+
 	xasprintf(&m.duration, "%d:%02d:%02d.%03d",
 	                      (song.song_length/3600000),
 	                      (song.song_length/60000%60),
 	                      (song.song_length/1000%60),
 	                      (song.song_length%1000));
-	if( song.title && *song.title )
-	{
-		m.title = trim(song.title);
-		if( (esc_tag = escape_tag(m.title, 0)) )
-		{
-			free_flags |= FLAG_TITLE;
-			m.title = esc_tag;
-		}
-	}
-	else
-	{
-		m.title = name;
-	}
-	for( i = ROLE_START; i < N_ROLE; i++ )
+
+	_assign_metadata_field(&m.title, song.title, &free_flags, FLAG_TITLE);
+	if (!m.title) m.title = name;
+
+	for( i = ROLE_START; i < N_ROLE; ++i )
 	{
 		if( song.contributor[i] && *song.contributor[i] )
 		{
-			m.creator = trim(song.contributor[i]);
-			if( (esc_tag = escape_tag(m.creator, 0)) )
-			{
-				m.creator = esc_tag;
-				free_flags |= FLAG_CREATOR;
-			}
+			_assign_metadata_field(&m.creator, song.contributor[i], &free_flags, FLAG_CREATOR);
 			m.artist = m.creator;
 			break;
 		}
@@ -717,58 +719,31 @@ GetAudioMetadata(const char *path, char *name)
 	   use it for virtual containers. */
 	if( i < ROLE_ALBUMARTIST )
 	{
-		for( i = ROLE_ALBUMARTIST; i <= ROLE_BAND; i++ )
+		for( i = ROLE_ALBUMARTIST; i <= ROLE_BAND; ++i )
 		{
 	        	if( song.contributor[i] && *song.contributor[i] )
 				break;
 		}
 	        if( i <= ROLE_BAND )
 		{
-			m.artist = trim(song.contributor[i]);
-			if( (esc_tag = escape_tag(m.artist, 0)) )
-			{
-				m.artist = esc_tag;
-				free_flags |= FLAG_ARTIST;
-			}
+			_assign_metadata_field(&m.artist, song.contributor[i], &free_flags, FLAG_ARTIST);
 		}
 	}
-	if( song.album && *song.album )
-	{
-		m.album = trim(song.album);
-		if( (esc_tag = escape_tag(m.album, 0)) )
-		{
-			free_flags |= FLAG_ALBUM;
-			m.album = esc_tag;
-		}
-	}
-	if( song.genre && *song.genre )
-	{
-		m.genre = trim(song.genre);
-		if( (esc_tag = escape_tag(m.genre, 0)) )
-		{
-			free_flags |= FLAG_GENRE;
-			m.genre = esc_tag;
-		}
-	}
-	if( song.comment && *song.comment )
-	{
-		m.comment = trim(song.comment);
-		if( (esc_tag = escape_tag(m.comment, 0)) )
-		{
-			free_flags |= FLAG_COMMENT;
-			m.comment = esc_tag;
-		}
-	}
+	
+	_assign_metadata_field(&m.album, song.album, &free_flags, FLAG_ALBUM);
+	_assign_metadata_field(&m.genre, song.genre, &free_flags, FLAG_GENRE);
+	_assign_metadata_field(&m.comment, song.comment, &free_flags, FLAG_COMMENT);
+	_assign_metadata_field(&m.description, song.description, &free_flags, FLAG_DESCRIPTION);
 
 	m.channels = song.channels;
 	m.bitrate = song.bitrate;
 	m.frequency = song.samplerate;
 	m.disc = song.disc;
 	m.track = song.track;
+
 	if ( song.mime )
 	{
-		free(m.mime);
-		m.mime = strdup(song.mime);
+		m.mime = song.mime;
 	}
 
 	album_art = find_album_art(path, song.image, song.image_size);

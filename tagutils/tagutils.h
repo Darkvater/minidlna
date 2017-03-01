@@ -49,7 +49,7 @@ struct song_metadata {
 	char *dirpath;
 	char *path;
 	char *basename;                         // basename is part of path
-	char *type;
+	const char *type;
 	int time_modified;
 
 	uint8_t *image;                         // coverart
@@ -59,6 +59,7 @@ struct song_metadata {
 	char *album;                            // TALB
 	char *genre;                            // TCON
 	char *comment;                          // COMM
+	char *description;			// ----
 
 	char *contributor[N_ROLE];              // TPE1  (artist)
 						// TCOM  (composer)
@@ -68,7 +69,7 @@ struct song_metadata {
 
 
 	char *grouping;                         // TIT1
-	int year;                               // TDRC
+	char *date;                             // TDRC, TYER
 	int track;                              // TRCK
 	int total_tracks;                       // TRCK
 	int disc;                               // TPOS
@@ -114,7 +115,7 @@ struct song_metadata {
 
 extern int scan_init(char *path);
 extern void make_composite_tags(struct song_metadata *psong);
-extern int readtags(char *path, struct song_metadata *psong, struct stat *stat, char *lang, char *type);
+extern int readtags(const char *path, struct song_metadata *psong, struct stat *stat, const char *lang, const char *type);
 extern void freetags(struct song_metadata *psong);
 
 extern int start_plist(const char *path, struct song_metadata *psong, struct stat *stat, char *lang, char *type);

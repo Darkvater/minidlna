@@ -42,12 +42,12 @@ struct mp3_frameinfo {
 	int is_valid;
 };
 
-static int _get_mp3tags(char *file, struct song_metadata *psong);
-static int _get_mp3fileinfo(char *file, struct song_metadata *psong);
+static int _get_mp3tags(const char *file, struct song_metadata *psong);
+static int _get_mp3fileinfo(const char *file, struct song_metadata *psong);
 static int _decode_mp3_frame(unsigned char *frame, struct mp3_frameinfo *pfi);
 
 // bitrate_tbl[layer_index][bitrate_index]
-static int bitrate_tbl[5][16] = {
+static const int bitrate_tbl[5][16] = {
 	{ 0, 32, 64,  96,  128, 160, 192, 224,	256,   288,  320, 352,	384,  416, 448, 0 },    /* MPEG1, L1 */
 	{ 0, 32, 48,  56,  64,	80,  96,  112,	128,   160,  192, 224,	256,  320, 384, 0 },    /* MPEG1, L2 */
 	{ 0, 32, 40,  48,  56,	64,  80,  96,	112,   128,  160, 192,	224,  256, 320, 0 },    /* MPEG1, L3 */
@@ -56,7 +56,7 @@ static int bitrate_tbl[5][16] = {
 };
 
 // sample_rate[sample_index][samplerate_index]
-static int sample_rate_tbl[3][4] = {
+static const int sample_rate_tbl[3][4] = {
 	{ 44100, 48000, 32000, 0 },     /* MPEG 1 */
 	{ 22050, 24000, 16000, 0 },     /* MPEG 2 */
 	{ 11025, 12000, 8000,  0 } /* MPEG 2.5 */

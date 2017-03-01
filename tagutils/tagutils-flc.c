@@ -21,7 +21,7 @@
  */
 
 static int
-_get_flctags(char *filename, struct song_metadata *psong)
+_get_flctags(const char *filename, struct song_metadata *psong)
 {
 	FLAC__Metadata_SimpleIterator *iterator = 0;
 	FLAC__StreamMetadata *block;
@@ -107,7 +107,7 @@ _get_flctags(char *filename, struct song_metadata *psong)
 }
 
 static int
-_get_flcfileinfo(char *filename, struct song_metadata *psong)
+_get_flcfileinfo(const char *filename, struct song_metadata *psong)
 {
 	psong->lossless = 1;
 	psong->vbr_scale = 1;

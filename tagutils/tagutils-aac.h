@@ -20,6 +20,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static int _get_aactags(char *file, struct song_metadata *psong);
-static int _get_aacfileinfo(char *file, struct song_metadata *psong);
+static int _get_aactags(const char *file, struct song_metadata *psong);
+static int _get_aacfileinfo(const char *file, struct song_metadata *psong);
 static off_t _aac_lookforatom(FILE *aac_fp, char *atom_path, unsigned int *atom_length);

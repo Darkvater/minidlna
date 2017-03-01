@@ -19,7 +19,7 @@
 
 #ifdef HAVE_WAVPACK
 
-static int _get_wvfileinfo(char *file, struct song_metadata *psong);
-static int _get_wvtags(char *file, struct song_metadata *psong);
+static int _get_wvfileinfo(const char *file, struct song_metadata *psong);
+static int _get_wvtags(const char *file, struct song_metadata *psong);
 
 #endif

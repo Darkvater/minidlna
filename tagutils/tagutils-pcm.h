@@ -18,4 +18,4 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static int _get_pcmfileinfo(char *file, struct song_metadata *psong);
+static int _get_pcmfileinfo(const char *file, struct song_metadata *psong);

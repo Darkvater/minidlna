@@ -182,31 +182,6 @@ _get_utf8_text(const id3_ucs4_t* native_text)
 	return utf8_text;
 }
 
-static int extract_year(const char *value, const size_t len)
-{
-        int res = 0;
-        char *year = NULL;
-
-        if(len >= 10 &&
-           isdigit(value[0]) && isdigit(value[1]) && ispunct(value[2]) &&
-           isdigit(value[3]) && isdigit(value[4]) && ispunct(value[5]) &&
-           isdigit(value[6]) && isdigit(value[7]) && isdigit(value[8]) && isdigit(value[9]))
-        {
-                year = strndup(value+6, 4);
-                // nn-nn-yyyy
-        }
-        else if (len >= 4)
-        {
-                year = strndup(value, 4);
-                // year first. year is at most 4 digit.
-        }
-
-        if (year) res = atoi(year);
-        free(year);
-
-        return res;
-}
-
 static const size_t _VC_MAX_VALUE_LEN = 1024;
 
 static inline int _strncasecmp(const char *name, const size_t name_len, const char *tag_name, const size_t tag_name_len)
@@ -222,14 +197,14 @@ static void _vc_assign_value(char **field, const char *value, const size_t value
 		*field = strndup(value, value_len);
 	}
 	else
-	{ // append ';' and value
+	{ // append ',' and value
 		size_t field_len = strlen(*field);
 		size_t new_len = field_len + value_len + 2;
 		if (new_len > _VC_MAX_VALUE_LEN) return;
 		char *new_val = (char*)realloc(*field, new_len);
 		if (new_val)
 		{
-			new_val[field_len] = ';';
+			new_val[field_len] = ',';
 			strncpy(new_val + field_len + 1, value, value_len);
 			new_val[new_len] = '\0';
 			*field = new_val;
@@ -312,11 +287,15 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	}
 	else if (!_strncasecmp(comment, name_len, "DATE", 4) || _strncasecmp(comment, name_len, "YEAR", 4))
 	{
-		psong->year = extract_year(value, value_len);
+		_vc_assign_value(&psong->date, value, value_len);
 	}
-	else if (!_strncasecmp(comment, name_len, "COMMENT", 7) || !_strncasecmp(comment, name_len, "DESCIPTION", 10))
+	else if (!_strncasecmp(comment, name_len, "COMMENT", 7))
 	{
 		_vc_assign_value(&psong->comment, value, value_len);
+	}
+	else if (!_strncasecmp(comment, name_len, "DESCRIPTION", 10) || !_strncasecmp(comment, name_len, "DESC", 4))
+	{
+		_vc_assign_value(&psong->description, value, value_len);
 	}
 	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_ALBUMID", 19))
 	{
