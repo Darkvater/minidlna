@@ -200,7 +200,10 @@ static void _vc_assign_value(char **field, const char *value, const size_t value
 	{ // append ',' and value
 		size_t field_len = strlen(*field);
 		size_t new_len = field_len + value_len + 2;
+		char* dup_value = strndup(value, value_len);
 		if (new_len > _VC_MAX_VALUE_LEN) return;
+		DPRINTF(E_WARN, L_METADATA, "Multi value field %s [%s], %d -> %d\n", *field, dup_value, (int)field_len, (int)new_len);
+		free(dup_value);
 		char *new_val = (char*)realloc(*field, new_len);
 		if (new_val)
 		{
@@ -285,7 +288,7 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	{
 		_vc_assign_value(&psong->genre, value, value_len);
 	}
-	else if (!_strncasecmp(comment, name_len, "DATE", 4) || _strncasecmp(comment, name_len, "YEAR", 4))
+	else if (!_strncasecmp(comment, name_len, "DATE", 4) || !_strncasecmp(comment, name_len, "YEAR", 4))
 	{
 		_vc_assign_value(&psong->date, value, value_len);
 	}
@@ -293,7 +296,7 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	{
 		_vc_assign_value(&psong->comment, value, value_len);
 	}
-	else if (!_strncasecmp(comment, name_len, "DESCRIPTION", 10) || !_strncasecmp(comment, name_len, "DESC", 4))
+	else if (!_strncasecmp(comment, name_len, "DESCRIPTION", 11) || !_strncasecmp(comment, name_len, "DESC", 4))
 	{
 		_vc_assign_value(&psong->description, value, value_len);
 	}
