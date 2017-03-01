@@ -200,10 +200,7 @@ static void _vc_assign_value(char **field, const char *value, const size_t value
 	{ // append ',' and value
 		size_t field_len = strlen(*field);
 		size_t new_len = field_len + value_len + 2;
-		char* dup_value = strndup(value, value_len);
 		if (new_len > _VC_MAX_VALUE_LEN) return;
-		DPRINTF(E_WARN, L_METADATA, "Multi value field %s [%s], %d -> %d\n", *field, dup_value, (int)field_len, (int)new_len);
-		free(dup_value);
 		char *new_val = (char*)realloc(*field, new_len);
 		if (new_val)
 		{
