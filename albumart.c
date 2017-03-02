@@ -244,9 +244,7 @@ static int _save_to_file(const uint8_t *image_data, int image_size, const char *
  	dst_file = fopen(path, "w");
 	if ( !dst_file )
 	{
-		char *dir = strdup(path);
-		make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-		free(dir);
+		make_dir_ex(path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 		dst_file = fopen(path, "w");
 	}
 
@@ -292,6 +290,7 @@ _check_embedded_art(const char *path, const uint8_t *image_data, int image_size)
 			goto save_resized;
 		}
 		free(art_path);
+		art_path = NULL;
 	}
 	last_hash = hash;
 
@@ -310,7 +309,7 @@ _check_embedded_art(const char *path, const uint8_t *image_data, int image_size)
 	else
 	{ // save as is
 		_art_cache_exists(path, &art_path);
-		DPRINTF(E_WARN, L_ARTWORK, "Saving embedded album art %s\n", path);
+		DPRINTF(E_WARN, L_ARTWORK, "Saving embedded album art %s\n", art_path);
 		if (_save_to_file(image_data, image_size, art_path))
 		{
 			DPRINTF(E_WARN, L_ARTWORK, "Fail to save embedded album art to %s\n", art_path);
@@ -345,8 +344,8 @@ save_resized:
 static char *
 _check_for_album_file(const char *path, char **original_album_art_location)
 {
-	char file[MAXPATHLEN];
-	char mypath[MAXPATHLEN];
+	char file[PATH_MAX];
+	char mypath[PATH_MAX];
 	struct linked_names_s *album_art_name;
 	char *p;
 	const char *dir;

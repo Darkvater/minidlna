@@ -127,7 +127,7 @@ log_init(const char *fname, const char *debug)
 }
 
 void
-log_err(int level, enum _log_facility facility, char *fname, int lineno, char *fmt, ...)
+log_err(int level, enum _log_facility facility, const char *fname, int lineno, const char *fmt, ...)
 {
 	va_list ap;
 

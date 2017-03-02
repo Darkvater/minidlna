@@ -487,6 +487,8 @@ static void init_nls(void)
 
 static void read_file(img_t* img, const char* dir, const char *filename) {
 	char path[1024];
+	size_t nread;
+
 	sprintf( path, "%s/%s", dir, filename);
 	FILE *file = fopen(path, "rb");
 	if(!file) {
@@ -505,7 +507,8 @@ static void read_file(img_t* img, const char* dir, const char *filename) {
 		perror("read_file(): failed to allocate memory");
 		exit(EXIT_FAILURE);
 	}
-	(void)fread(img->data, sizeof(char), img->size, file);
+	nread = fread(img->data, sizeof(char), img->size, file);
+	DPRINTF(E_DEBUG, L_GENERAL, "Read %d bytes from %s\n", (int)nread, path );
 	fclose(file);
 }
 
