@@ -832,7 +832,7 @@ GetImageMetadata(const char *path, char *name)
 
 no_exifdata:
 	/* If SOF parsing fails, then fall through to reading the JPEG data with libjpeg to get the resolution */
-	if( image_get_jpeg_resolution(path, &width, &height) != 0 || !width || !height )
+	if( image_get_jpeg_resolution(path, 1, NULL, 0, &width, &height) != 0 || !width || !height )
 	{
 		infile = fopen(path, "r");
 		if( infile )

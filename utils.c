@@ -372,7 +372,7 @@ link_file(const char *src_file, const char *dst_file)
 
 /* Simple, efficient hash function from Daniel J. Bernstein */
 unsigned int
-DJBHash(uint8_t *data, int len)
+DJBHash(const uint8_t *data, int len)
 {
 	unsigned int hash = 5381;
 	unsigned int i = 0;

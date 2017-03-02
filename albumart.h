@@ -42,7 +42,7 @@ typedef struct
 } image_size_type_t;
 
 void update_if_album_art(const char *path);
-int64_t find_album_art(const char *path, uint8_t *image_data, int image_size);
+int64_t find_album_art(const char *path, const uint8_t *image_data, int image_size);
 const image_size_type_t *get_image_size_type(image_size_type_enum size_type);
 char *get_path_from_image_size_type(const char *path, const image_size_type_t *image_size_type);
 int save_resized_album_art_from_file_to_file(const char *path, const char *dst, const image_size_type_t *image_size_type);

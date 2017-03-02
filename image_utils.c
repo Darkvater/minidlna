@@ -192,14 +192,31 @@ jpeg_memory_src(j_decompress_ptr cinfo, const unsigned char * buffer, size_t buf
 	src->pub.bytes_in_buffer = bufsize;
 }
 
-jmp_buf setjmp_buffer;
-/* Don't exit on error like libjpeg likes to do */
-static void
-libjpeg_error_handler(j_common_ptr cinfo)
+typedef struct {
+    /* "public" fields */
+    struct jpeg_error_mgr pub;
+    /* for return to caller */
+    jmp_buf setjmp_buffer;
+    char jpeg_last_error_msg[JMSG_LENGTH_MAX];
+} custom_jpeg_error_manager;
+
+
+
+static void custom_jpeg_error_exit(j_common_ptr cinfo)
 {
-	cinfo->err->output_message(cinfo);
-	longjmp(setjmp_buffer, 1);
-	return;
+    /* cinfo->err actually points to a jpegErrorManager struct */
+    custom_jpeg_error_manager* myerr = (custom_jpeg_error_manager*) cinfo->err;
+    /* note : *(cinfo->err) is now equivalent to myerr->pub */
+
+    /* output_message is a method to print an error message */
+    /*(* (cinfo->err->output_message) ) (cinfo);*/
+
+    /* Create the message */
+    ( *(cinfo->err->format_message) ) (cinfo, myerr->jpeg_last_error_msg);
+
+    /* Jump to the setjmp point */
+    longjmp(myerr->setjmp_buffer, 1);
+
 }
 
 void
@@ -233,68 +250,49 @@ put_pix_alpha_replace(image_s *pimage, int32_t x, int32_t y, pix col)
 }
 
 int
-image_get_jpeg_resolution(const char * path, int * width, int * height)
+image_get_jpeg_resolution(const char * path, int is_file, const uint8_t *buf, int size, int * width, int * height)
 {
-	FILE *img;
-	unsigned char buf[8];
-	uint16_t offset, h, w;
-	int ret = 1;
-	size_t nread;
-	long size;
+	FILE  *file = NULL;
+	struct jpeg_decompress_struct cinfo;
+	custom_jpeg_error_manager jerr;
+	int res;
+
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = custom_jpeg_error_exit;
 	
-
-	img = fopen(path, "r");
-	if( !img )
+    if (setjmp(jerr.setjmp_buffer))
+    {
+		DPRINTF(E_ERROR, L_METADATA, "jpeg handling failed - %s.\n", jerr.jpeg_last_error_msg );
+		jpeg_destroy_decompress(&cinfo);
+		if( is_file && file ) fclose(file);
 		return -1;
+    }
 
-	fseek(img, 0, SEEK_END);
-	size = ftell(img);
-	rewind(img);
-
-	nread = fread(&buf, 2, 1, img);
-	if( (nread < 1) || (buf[0] != 0xFF) || (buf[1] != 0xD8) )
+	jpeg_create_decompress(&cinfo);
+	if( is_file )
 	{
-		fclose(img);
-		return -1;
+		if( (file = fopen(path, "r")) == NULL )
+		{
+			jpeg_destroy_decompress(&cinfo);
+			return -1;
+		}
+		jpeg_stdio_src(&cinfo, file);
 	}
-	memset(&buf, 0, sizeof(buf));
-
-	while( ftell(img) < size )
+	else
 	{
-		while( nread > 0 && buf[0] != 0xFF && !feof(img) )
-			nread = fread(&buf, 1, 1, img);
-
-		while( nread > 0 && buf[0] == 0xFF && !feof(img) )
-			nread = fread(&buf, 1, 1, img);
-
-		if( (buf[0] >= 0xc0) && (buf[0] <= 0xc3) )
-		{
-			nread = fread(&buf, 7, 1, img);
-			*width = 0;
-			*height = 0;
-			if( nread < 1 )
-				break;
-			memcpy(&h, buf+3, 2);
-			*height = SWAP16(h);
-			memcpy(&w, buf+5, 2);
-			*width = SWAP16(w);
-			ret = 0;
-			break;
-		}
-		else
-		{
-			offset = 0;
-			nread = fread(&buf, 2, 1, img);
-			if( nread < 1 )
-				break;
-			memcpy(&offset, buf, 2);
-			offset = SWAP16(offset) - 2;
-			if( fseek(img, offset, SEEK_CUR) == -1 )
-				break;
-		}
+		jpeg_memory_src(&cinfo, buf, size);
 	}
-	fclose(img);
-	return ret;
+
+	res = jpeg_read_header(&cinfo, TRUE);
+	if (res == JPEG_HEADER_OK)
+	{
+		*width = cinfo.output_width;
+		*height = cinfo.output_height;
+	}
+	jpeg_destroy_decompress(&cinfo);
+	if( is_file ) fclose(file);
+
+	return !(res == JPEG_HEADER_OK);
 }
 
 int
@@ -430,10 +428,19 @@ image_new_from_jpeg(const char *path, int is_file, const uint8_t *buf, int size,
 	unsigned char *line[16], *ptr;
 	int x, y, i, w, h, ofs;
 	int maxbuf;
-	struct jpeg_error_mgr pub;
+	custom_jpeg_error_manager jerr;
 
-	cinfo.err = jpeg_std_error(&pub);
-	pub.error_exit = libjpeg_error_handler;
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = custom_jpeg_error_exit;
+
+    if (setjmp(jerr.setjmp_buffer))
+    {
+		DPRINTF(E_ERROR, L_METADATA, "jpeg handling failed - %s.\n", jerr.jpeg_last_error_msg );
+		jpeg_destroy_decompress(&cinfo);
+		if( is_file && file ) fclose(file);
+		return NULL;
+    }
+
 	jpeg_create_decompress(&cinfo);
 	if( is_file )
 	{
@@ -446,14 +453,6 @@ image_new_from_jpeg(const char *path, int is_file, const uint8_t *buf, int size,
 	else
 	{
 		jpeg_memory_src(&cinfo, buf, size);
-	}
-	if( setjmp(setjmp_buffer) )
-	{
-		DPRINTF(E_ERROR, L_METADATA, "jpeg handling failed on %s\n", path);
-		jpeg_destroy_decompress(&cinfo);
-		if( is_file && file )
-			fclose(file);
-		return NULL;
 	}
 	jpeg_read_header(&cinfo, TRUE);
 	cinfo.scale_denom = scale;
@@ -472,8 +471,9 @@ image_new_from_jpeg(const char *path, int is_file, const uint8_t *buf, int size,
 		return NULL;
 	}
 
-	if( setjmp(setjmp_buffer) )
+	if( setjmp(jerr.setjmp_buffer) )
 	{
+		DPRINTF(E_ERROR, L_METADATA, "jpeg handling failed - %s.\n", jerr.jpeg_last_error_msg );
 		jpeg_destroy_decompress(&cinfo);
 		if( is_file && file )
 			fclose(file);
