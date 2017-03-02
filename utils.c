@@ -270,10 +270,9 @@ strip_char(char *name, char c)
 }
 
 /* Code basically stolen from busybox */
-int
-make_dir(char * path, mode_t mode)
-{
-	char * s = path;
+int make_dir(const char *path, mode_t mode) {
+	char *path_copy = strdup(path);
+	char * s = path_copy;
 	char c;
 	struct stat st;
 
@@ -291,26 +290,28 @@ make_dir(char * path, mode_t mode)
 				do {
 					++s;
 				} while (*s == '/');
-				c = *s;     /* Save the current char */
-				*s = '\0';     /* and replace it with nul. */
+				c = *s; /* Save the current char */
+				*s = '\0'; /* and replace it with nul. */
 				break;
 			}
 			++s;
 		}
 
-		if (mkdir(path, mode) < 0) {
+		if (mkdir(path_copy, mode) < 0) {
 			/* If we failed for any other reason than the directory
 			 * already exists, output a diagnostic and return -1.*/
 			if ((errno != EEXIST && errno != EISDIR)
-			    || (stat(path, &st) < 0 || !S_ISDIR(st.st_mode))) {
-				DPRINTF(E_WARN, L_GENERAL, "make_dir: cannot create directory '%s'\n", path);
-				if (c)
-					*s = c;
+					|| (stat(path_copy, &st) < 0 || !S_ISDIR(st.st_mode))) {
+				DPRINTF(E_WARN, L_GENERAL, "make_dir: cannot create directory '%s'\n", path_copy);
+				free(path_copy);
 				return -1;
 			}
 		}
-	        if (!c)
+
+		if (!c) {
+			free(path_copy);
 			return 0;
+		}
 
 		/* Remove any inserted nul from the path. */
 		*s = c;
@@ -318,21 +319,35 @@ make_dir(char * path, mode_t mode)
 	} while (1);
 }
 
+int make_dir_ex(const char *full_path, mode_t mode) {
+	char *full_path_copy = strdup(full_path);
+	int res = make_dir(dirname(full_path_copy), mode);
+	free(full_path_copy);
+	return res;
+}
+
+static const size_t _BUF_SIZE = 1024 * 4;
+
 int
 copy_file(const char *src_file, const char *dst_file)
 {
-	char buf[MAXPATHLEN];
 	size_t nread;
 	size_t nwritten = 0;
 	size_t size = 0;
+	void* buf;
 
-	strncpyt(buf, dst_file, sizeof(buf));
-	make_dir(dirname(buf), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	if (!(buf = malloc(_BUF_SIZE)))
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "copying %s to %s failed - unable to allocate buffer\n", src_file, dst_file);
+		return -1;
+	}
+
+	make_dir_ex(dst_file, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 
 	FILE *fsrc = fopen(src_file, "rb");
 	FILE *fdst = fopen(dst_file, "wb");
 
-	while ((nread = fread(buf, 1, sizeof(buf), fsrc)) > 0)
+	while ((nread = fread(buf, 1, _BUF_SIZE, fsrc)) > 0)
 	{
 		size += nread;
 		nwritten += fwrite(buf, 1, nread, fdst);
@@ -344,8 +359,11 @@ copy_file(const char *src_file, const char *dst_file)
 	if (nwritten != size)
 	{
 		DPRINTF(E_WARN, L_ARTWORK, "copying %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
+		free(buf);
 		return -1;
 	}
+
+	free(buf);
 	return 0;
 }
 
@@ -357,9 +375,7 @@ link_file(const char *src_file, const char *dst_file)
 
 	if (errno == ENOENT)
 	{
-		char *dir = strdup(dst_file);
-		make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-		free(dir);
+		make_dir_ex(dst_file, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 		if (link(src_file, dst_file) == 0)
 			return 0;
 		/* try a softlink if all else fails */
