@@ -309,7 +309,6 @@ _check_embedded_art(const char *path, const uint8_t *image_data, int image_size)
 	else
 	{ // save as is
 		_art_cache_exists(path, &art_path);
-		DPRINTF(E_WARN, L_ARTWORK, "Saving embedded album art %s\n", art_path);
 		if (_save_to_file(image_data, image_size, art_path))
 		{
 			DPRINTF(E_WARN, L_ARTWORK, "Fail to save embedded album art to %s\n", art_path);
