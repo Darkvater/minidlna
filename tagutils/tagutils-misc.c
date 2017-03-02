@@ -198,8 +198,14 @@ static void _vc_assign_value(char **field, const char *value, const size_t value
 	}
 	else
 	{ // append ',' and value
-		size_t field_len = strlen(*field);
-		size_t new_len = field_len + value_len + 2;
+		size_t field_len, new_len;
+		char *value_str = strndup(value, value_len);
+		DPRINTF(E_ERROR, L_SCANNER, "Appending VC1 %s to %s\n", value_str, *field);
+		free(value_str);
+
+		field_len = strlen(*field);
+		new_len = field_len + value_len + 2;
+		DPRINTF(E_ERROR, L_SCANNER, "Appending VC2 %d -> %d [%d]\n", (int)(field_len+1), (int)new_len, (int)value_len);
 		if (new_len > _VC_MAX_VALUE_LEN) return;
 		char *new_val = (char*)realloc(*field, new_len);
 		if (new_val)
@@ -208,6 +214,8 @@ static void _vc_assign_value(char **field, const char *value, const size_t value
 			strncpy(new_val + field_len + 1, value, value_len);
 			new_val[new_len] = '\0';
 			*field = new_val;
+
+			DPRINTF(E_ERROR, L_SCANNER, "Appending VC3 %s.\n", new_val);
 		}
 	}
 }
@@ -239,19 +247,19 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	}
 	else if (!_strncasecmp(comment, name_len, "ARTIST", 6))
 	{
-		_vc_assign_value(&psong->contributor[ROLE_ARTIST], value, value_len);
+		_vc_assign_value(&(psong->contributor[ROLE_ARTIST]), value, value_len);
 	}
 	else if (!_strncasecmp(comment, name_len, "ARTISTSORT", 10))
 	{
-		_vc_assign_value(&psong->contributor_sort[ROLE_ARTIST], value, value_len);
+		_vc_assign_value(&(psong->contributor_sort[ROLE_ARTIST]), value, value_len);
 	} 
 	else if (!_strncasecmp(comment, name_len, "ALBUMARTIST", 11))
 	{
-		_vc_assign_value(&psong->contributor[ROLE_BAND], value, value_len);
+		_vc_assign_value(&(psong->contributor[ROLE_BAND]), value, value_len);
 	}
 	else if (!_strncasecmp(comment, name_len, "ALBUMARTISTSORT", 15))
 	{
-		_vc_assign_value(&psong->contributor_sort[ROLE_BAND], value, value_len);
+		_vc_assign_value(&(psong->contributor_sort[ROLE_BAND]), value, value_len);
 	}
 	else if (!_strncasecmp(comment, name_len, "TITLE", 5))
 	{
@@ -275,11 +283,11 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	}
 	else if (!_strncasecmp(comment, name_len, "COMPOSER", 8))
 	{
-		_vc_assign_value(&psong->contributor[ROLE_COMPOSER], value, value_len);
+		_vc_assign_value(&(psong->contributor[ROLE_COMPOSER]), value, value_len);
 	}
 	else if (!_strncasecmp(comment, name_len, "CONDUCTOR", 9))
 	{
-		_vc_assign_value(&psong->contributor[ROLE_CONDUCTOR], value, value_len);
+		_vc_assign_value(&(psong->contributor[ROLE_CONDUCTOR]), value, value_len);
 	}
 	else if (!_strncasecmp(comment, name_len, "GENRE", 5))
 	{
@@ -305,10 +313,6 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	{
 		_vc_assign_value(&psong->musicbrainz_trackid, value, value_len);
 	}
-	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_TRACKID", 19))
-	{
-		_vc_assign_value(&psong->musicbrainz_trackid, value, value_len);
-	}
 	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_ARTISTID", 20))
 	{
 		_vc_assign_value(&psong->musicbrainz_artistid, value, value_len);
@@ -316,5 +320,15 @@ vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_ALBUMARTISTID", 25))
 	{
 		_vc_assign_value(&psong->musicbrainz_albumartistid, value, value_len);
+	}
+	else
+	{
+		char *name = strndup(comment, name_len);
+		char *value_str = strndup(value, value_len);
+		if (name && value_str) DPRINTF(E_ERROR, L_SCANNER, "Unhandled Vorbis Comment %s=%s\n", name, value_str);
+		free(name);
+		free(value_str);
+
+		_vc_assign_value(&psong->description, value, value_len);
 	}
 }

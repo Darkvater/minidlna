@@ -172,13 +172,13 @@ freetags(struct song_metadata *psong)
 	free(psong->genre);
 	free(psong->comment);
 	free(psong->description);
-	free(psong->date);
 	for(role = ROLE_START; role <= ROLE_LAST; role++)
 	{
 		free(psong->contributor[role]);
 		free(psong->contributor_sort[role]);
 	}
 	free(psong->grouping);
+	free(psong->date);
 	free(psong->mime);
 	free(psong->dlna_pn);
 	free(psong->tagversion);
@@ -196,7 +196,7 @@ _get_fileinfo(const char *file, struct song_metadata *psong)
 
 	// dispatch to appropriate tag handler
 	for(hdl = taghandlers; hdl->type; ++hdl)
-		if(!strcmp(hdl->type, psong->type))
+		if(!strcasecmp(hdl->type, psong->type))
 			break;
 
 	if(hdl->get_fileinfo)

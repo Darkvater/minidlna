@@ -63,19 +63,19 @@ static void _wv_add_tag(struct song_metadata *psong, const char *item, const cha
 	}
 	else if (!strcasecmp(item, "ARTIST") )
 	{
-		_wv_assign_tag_value(&psong->contributor[ROLE_ARTIST], value);
+		_wv_assign_tag_value(&(psong->contributor[ROLE_ARTIST]), value);
 	}
 	else if (!strcasecmp(item, "ARTISTSORT") )
         {
-                _wv_assign_tag_value(&psong->contributor_sort[ROLE_ARTIST], value);
+                _wv_assign_tag_value(&(psong->contributor_sort[ROLE_ARTIST]), value);
         }
         else if (!strcasecmp(item, "COMPOSER") )
         {
-                _wv_assign_tag_value(&psong->contributor[ROLE_COMPOSER], value);
+                _wv_assign_tag_value(&(psong->contributor[ROLE_COMPOSER]), value);
         }
         else if (!strcasecmp(item, "CONDUCTOR") )
         {
-                _wv_assign_tag_value(&psong->contributor[ROLE_CONDUCTOR], value);
+                _wv_assign_tag_value(&(psong->contributor[ROLE_CONDUCTOR]), value);
         }
         else if (!strcasecmp(item, "ALBUMARTIST"))
 	{
@@ -83,7 +83,7 @@ static void _wv_add_tag(struct song_metadata *psong, const char *item, const cha
 	}
 	else if (!strcasecmp(item, "ALBUMARTISTSORT"))
         {
-                _wv_assign_tag_value(&psong->contributor_sort[ROLE_BAND], value);
+                _wv_assign_tag_value(&(psong->contributor_sort[ROLE_BAND]), value);
         }
 	else if (!strcasecmp(item, "TITLE"))
 	{

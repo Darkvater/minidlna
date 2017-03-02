@@ -48,7 +48,7 @@ struct song_metadata {
 	int file_size;
 	char *dirpath;
 	char *path;
-	char *basename;                         // basename is part of path
+	const char *basename;                         // basename is part of path
 	const char *type;
 	int time_modified;
 
