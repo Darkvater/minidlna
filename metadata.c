@@ -611,7 +611,7 @@ GetAudioMetadata(const char *path, char *name)
 	struct stat file;
 	int64_t ret;
 	int i;
-	int64_t album_art = 0;
+	int64_t album_art_id = 0;
 	struct song_metadata song;
 	metadata_t m;
 	uint32_t free_flags = FLAG_DURATION|FLAG_DLNA_PN;
@@ -700,8 +700,8 @@ GetAudioMetadata(const char *path, char *name)
 		m.mime = song.mime;
 	}
 
-	album_art = find_album_art(path, song.image, song.image_size);
-	ret = add_entry_to_details(path, file.st_size, file.st_mtime, &m, album_art);
+	album_art_id = album_art_add(path, song.image, song.image_size);
+	ret = add_entry_to_details(path, file.st_size, file.st_mtime, &m, album_art_id);
 
 	freetags(&song);
 	free_metadata(&m, free_flags);
@@ -1759,7 +1759,7 @@ video_no_dlna:
 	if( !m.title )
 		m.title = strdup(name);
 
-	album_art = find_album_art(path, m.thumb_data, m.thumb_size);
+	album_art = album_art_add(path, m.thumb_data, m.thumb_size);
 	freetags(&video);
 	lav_close(ctx);
 

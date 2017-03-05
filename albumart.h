@@ -30,21 +30,32 @@ typedef enum {
 	JPEG_MED,
 	JPEG_LRG,
 	JPEG_INV
-} image_size_type_enum;
+} image_size_enum;
+
+typedef union
+{
+	struct
+	{
+		uint8_t *data;
+		size_t size;
+	} blob;
+	char *path;
+} blob_or_path_t;
 
 typedef struct
 {
-	image_size_type_enum type;
-	const char* name;
-	const char* short_name;
-	int width;
-	int height;
-} image_size_type_t;
+	int is_blob;
+	blob_or_path_t image;
+	uint32_t checksum;
+	time_t timestamp;
+} album_art_t;
 
-void update_if_album_art(const char *path);
-int64_t find_album_art(const char *path, const uint8_t *image_data, int image_size);
-const image_size_type_t *get_image_size_type(image_size_type_enum size_type);
-char *get_path_from_image_size_type(const char *path, const image_size_type_t *image_size_type);
-int save_resized_album_art_from_file_to_file(const char *path, const char *dst, const image_size_type_t *image_size_type);
+const char* album_art_get_size_name(image_size_enum image_size);
+int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size);
+int album_art_check(int64_t album_art_id);
+album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size);
+int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size);
+void album_art_update_cond(const char *path);
+void album_art_free(album_art_t *album_art);
 
 #endif

@@ -149,7 +149,7 @@ notify_event_insert_file(char *name, const char *path, media_types types)
 
 	/* Is it cover art for another file? */
 	if (is_image(path))
-		update_if_album_art(path);
+		album_art_update_cond(path);
 	else if (is_caption(path))
 		add_caption_if_has_media(path);
 	else if (is_metadata(path))

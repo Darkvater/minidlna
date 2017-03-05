@@ -63,7 +63,10 @@ char create_detailTable_sqlite[] = "CREATE TABLE DETAILS ("
 
 char create_albumArtTable_sqlite[] = "CREATE TABLE ALBUM_ART ("
                     "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
-                    "PATH TEXT NOT NULL, "
+                    "PATH NOT NULL, "
+					"PROFILE INTEGER, "
+					"PARENT INTEGER, "
+					"CHECKSUM INTEGER, "
                     "TIMESTAMP INTEGER"
                     ");";
 

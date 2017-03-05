@@ -36,6 +36,8 @@
 #include "utils.h"
 #include "log.h"
 
+static const size_t _BUF_SIZE = 1024 * 4;
+
 int
 xasprintf(char **strp, const char *fmt, ...)
 {
@@ -326,7 +328,6 @@ int make_dir_ex(const char *full_path, mode_t mode) {
 	return res;
 }
 
-static const size_t _BUF_SIZE = 1024 * 4;
 
 int
 copy_file(const char *src_file, const char *dst_file)
@@ -387,8 +388,7 @@ link_file(const char *src_file, const char *dst_file)
 }
 
 /* Simple, efficient hash function from Daniel J. Bernstein */
-unsigned int
-DJBHash(const uint8_t *data, int len)
+unsigned int djb_hash(const uint8_t *data, int len)
 {
 	unsigned int hash = 5381;
 	unsigned int i = 0;
@@ -399,6 +399,44 @@ DJBHash(const uint8_t *data, int len)
 	}
 
 	return hash;
+}
+
+int djb_hash_from_file(const char *path, unsigned int *hash)
+{
+	uint8_t *buf;
+	FILE *fsrc;
+	size_t nread, i;
+
+	unsigned int _hash = 5381;
+
+	if (!(buf = malloc(_BUF_SIZE)))
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "DJB hash %s - unable to allocate buffer\n", path);
+		return 0;
+	}
+
+	fsrc = fopen(path, "rb");
+	if (fsrc)
+	{
+
+		while((nread = fread(buf, 1, _BUF_SIZE, fsrc)) > 0)
+		{
+			for(i = 0; i < nread; ++i)
+			{
+				_hash = ((_hash << 5) + _hash) + (buf[i]);
+			}
+		}
+
+		fclose(fsrc);
+		*hash = _hash;
+		free(buf);
+		return 1;
+	}
+	else
+	{
+		free(buf);
+		return 0;
+	}
 }
 
 const char *

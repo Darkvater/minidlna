@@ -111,6 +111,7 @@ int make_dir(const char *path, mode_t mode);
 int make_dir_ex(const char *full_path, mode_t mode);
 int copy_file(const char *src_file, const char *dst_file);
 int link_file(const char *src_file, const char *dst_file);
-unsigned int DJBHash(const uint8_t *data, int len);
+unsigned int djb_hash(const uint8_t *data, int len);
+int djb_hash_from_file(const char *path, unsigned int *hash);
 
 #endif
