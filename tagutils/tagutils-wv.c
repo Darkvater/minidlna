@@ -272,18 +272,30 @@ static int _get_wvtags(const char *filename, struct song_metadata *psong)
 		_wv_add_binary_tag(psong, item, value, len);
 	}
 
-	if (psong->title)
+	switch(WavpackGetFileFormat(ctx))
 	{
-		unsigned char fmt = WavpackGetFileFormat(ctx);
-		if (fmt == WP_FORMAT_DFF || fmt == WP_FORMAT_DSF)
+		case WP_FORMAT_DFF:
+		case WP_FORMAT_DSF:
 		{ // DSD
-			char *dst_title = NULL;
-			int res = xasprintf(&dst_title, "%s [DSD]", psong->title);
-			if (res)
+			int dsd_level = psong->samplerate / ((psong->samplerate % 44100)? 48000 : 44100);
+			int res;
+
+			if (psong->title)
 			{
-				free(psong->title);
-				psong->title = dst_title;
+				char *dst_title = NULL;
+				res = xasprintf(&dst_title, "%s [DSD%d]", psong->title, dsd_level);
+				if (res)
+				{
+					free(psong->title);
+					psong->title = dst_title;
+				}
 			}
+
+			if (!psong->description)
+			{
+				res = xasprintf(&psong->description, "DSD%d", dsd_level);
+			}
+			break;
 		}
 	}
 
