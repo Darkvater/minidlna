@@ -1486,11 +1486,11 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 #endif /* USE_FORK */
 
 
-	album_art_t *album_art = album_art_find(album_art_id, size_type);
+	album_art_t *album_art = album_art_get(album_art_id, size_type);
 
 	if (!album_art) {
 
-		DPRINTF(E_DEBUG, L_HTTP, "Album art doesn't exist in cache, adding new entry %lld\n", album_art_id);
+		DPRINTF(E_DEBUG, L_HTTP, "Album art doesn't exist in cache, adding new entry %lld-%d\n", album_art_id, (int)size_type);
 #if USE_FORK
 		newpid = process_fork(h->req_client);
 		if (newpid > 0)
@@ -1504,7 +1504,7 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 			int64_t resized_album_art_id = album_art_create_sized(album_art_id, size_type);
 			if (resized_album_art_id)
 			{
-				album_art = album_art_find(album_art_id, size_type);
+				album_art = album_art_get(album_art_id, size_type);
 			}
 		}
 
@@ -1516,10 +1516,9 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 		}
 	}
 
-	DPRINTF(E_INFO, L_HTTP, "Serving album art ID: %lld\n", album_art_id);
-
 	if (album_art->is_blob)
 	{
+		DPRINTF(E_INFO, L_HTTP, "Serving album art %lld-%d from blob\n", album_art_id, (int)size_type);
 		INIT_STR(str, header);
 
 #if USE_FORK
@@ -1542,6 +1541,9 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 	else
 	{
 		off_t size;
+
+		DPRINTF(E_INFO, L_HTTP, "Serving album art %lld-%d from file %s\n", album_art_id, (int)size_type, album_art->image.path);
+
 		int fd = _open_file(album_art->image.path);
 		if( fd < 0 ) {
 			DPRINTF(E_ERROR, L_HTTP, "Error opening %s\n", album_art->image.path);

@@ -53,7 +53,7 @@ typedef struct
 const char* album_art_get_size_name(image_size_enum image_size);
 int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size);
 int album_art_check(int64_t album_art_id);
-album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size);
+album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size);
 int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size);
 void album_art_update_cond(const char *path);
 void album_art_free(album_art_t *album_art);

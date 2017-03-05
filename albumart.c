@@ -355,7 +355,7 @@ static int64_t _insert_sized_album_art(const album_art_t *album_art, image_size_
 	res = sqlite3_prepare_v2(db, "INSERT INTO ALBUM_ART(PATH,CHECKSUM,TIMESTAMP,PARENT,PROFILE) VALUES (?,?,?,?,?)", -1, &stmt, NULL);
 	if (res != SQLITE_OK)
 	{
-		DPRINTF(E_WARN, L_ARTWORK, "_insert_sized_album_art fail to prepare statement %s\n", sqlite3_errmsg(db));
+		DPRINTF(E_ERROR, L_ARTWORK, "_insert_sized_album_art(%lld,%d) fail to prepare statement %s\n", (long long)parent_album_art_id, (int)image_size, sqlite3_errmsg(db));
 		return 0;
 	}
 
@@ -387,7 +387,7 @@ static int64_t _insert_sized_album_art(const album_art_t *album_art, image_size_
 	}
 	else
 	{ // error here
-		DPRINTF(E_WARN, L_ARTWORK, "_insert_sized_album_art fail to execute statement - %s\n", sqlite3_errmsg(db));
+		DPRINTF(E_WARN, L_ARTWORK, "_insert_sized_album_art(%lld,%d) fail to execute statement - %s\n", (long long)parent_album_art_id, (int)image_size, sqlite3_errmsg(db));
 	}
 
 	sqlite3_finalize(stmt);
@@ -445,7 +445,7 @@ static int _is_album_art_valid(const album_art_t *album_art)
 		return (album_art->image.path != NULL);
 }
 
-album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size)
+album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size)
 {
 	sqlite3_stmt *stmt;
 	int column_type, res;
@@ -454,20 +454,20 @@ album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size)
 
 	if (image_size == JPEG_INV)
 	{
-		res = sqlite3_prepare_v2(db, "SELECT PATH, CHECKSUM, TIMESTAMP FROM ALBUM_ART WHERE ID=? AND PARENT IS NULL", -1, &stmt, NULL);
+		res = sqlite3_prepare_v2(db, "SELECT PATH,CHECKSUM,TIMESTAMP FROM ALBUM_ART WHERE ID=? AND PARENT IS NULL", -1, &stmt, NULL);
 		if (res != SQLITE_OK)
 		{
-			DPRINTF(E_WARN, L_ARTWORK, "album_art_find(1) fail to prepare statement %s\n", sqlite3_errmsg(db));
+			DPRINTF(E_ERROR, L_ARTWORK, "album_art_get(1) fail to prepare statement %s\n", sqlite3_errmsg(db));
 			return NULL;
 		}
 		res = sqlite3_bind_int64(stmt, 1, album_art_id);
 	}
 	else
 	{
-		res = sqlite3_prepare_v2(db, "SELECT PATH, CHECKSUM, TIMESTAMP FROM ALBUM_ART WHERE PARENT=? AND PROFILE=?", -1, &stmt, NULL);
+		res = sqlite3_prepare_v2(db, "SELECT PATH,CHECKSUM,TIMESTAMP FROM ALBUM_ART WHERE PARENT=? AND PROFILE=?", -1, &stmt, NULL);
 		if (res != SQLITE_OK)
 		{
-			DPRINTF(E_WARN, L_ARTWORK, "album_art_find(2) fail to prepare statement %s\n", sqlite3_errmsg(db));
+			DPRINTF(E_ERROR, L_ARTWORK, "album_art_get(2) fail to prepare statement %s\n", sqlite3_errmsg(db));
 			return NULL;
 		}
 		res = sqlite3_bind_int64(stmt, 1, album_art_id);
@@ -488,43 +488,48 @@ album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size)
 
 				case SQLITE_TEXT:
 				{
-					album_art = (album_art_t*)calloc(1, sizeof(album_art_t));
-					if (album_art)
+					if ((album_art = (album_art_t*)calloc(1, sizeof(album_art_t))))
 					{
 						album_art->image.path = strdup((const char*)sqlite3_column_text(stmt, 0));
 						album_art->is_blob = 0;
 						album_art->checksum = (uint32_t)sqlite3_column_int64(stmt, 1);
 						album_art->timestamp = sqlite3_column_int64(stmt, 2);
 					}
+					else
+					{
+						DPRINTF(E_WARN, L_ARTWORK, "album_art_get(%lld,%d) fail to allocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
+					}
 					break;
 				}
 
 				case SQLITE_BLOB:
 				{
-					album_art = (album_art_t*)calloc(1, sizeof(album_art_t));
-					if (album_art)
+					if ((album_art = (album_art_t*)calloc(1, sizeof(album_art_t))))
 					{
 						size_t nbytes = sqlite3_column_bytes(stmt, 0);
-						album_art->image.blob.data = malloc(nbytes);
-						if (album_art->image.blob.data)
+						if ((album_art->image.blob.data = malloc(nbytes)))
 						{
 							memcpy(album_art->image.blob.data, sqlite3_column_blob(stmt, 0), nbytes);
 						}
 						else
 						{
-							DPRINTF(E_DEBUG, L_ARTWORK, "album_art_find fail to allocate memory block %lld\n", (long long)nbytes);
+							DPRINTF(E_WARN, L_ARTWORK, "album_art_get(%lld,%d) fail to allocate memory block %lld\n", (long long)album_art_id, (int)image_size, (long long)nbytes);
 						}
 						album_art->image.blob.size = nbytes;
 						album_art->is_blob = 1;
 						album_art->checksum = (uint32_t)sqlite3_column_int64(stmt, 1);
 						album_art->timestamp = sqlite3_column_int64(stmt, 2);
 					}
+					else
+					{
+						DPRINTF(E_WARN, L_ARTWORK, "album_art_get(%lld,%d) fail to allocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
+					}
 					break;
 				}
 
 				default:
 				{ // report error, unsupported column type
-					DPRINTF(E_WARN, L_ARTWORK, "album_art_find unexpected column type %d\n", column_type);
+					DPRINTF(E_WARN, L_ARTWORK, "album_art_get(%lld,%d) unexpected column type %d\n", (long long)album_art_id, (int)image_size, column_type);
 				}
 			}
 			break;
@@ -535,7 +540,7 @@ album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size)
 
 		default:
 		{ // report error
-			DPRINTF(E_WARN, L_ARTWORK, "album_art_find fail to execute statement - %s\n", sqlite3_errmsg(db));
+			DPRINTF(E_WARN, L_ARTWORK, "album_art_get(%lld,%d) fail to execute statement - %s\n", (long long)album_art_id, (int)image_size, sqlite3_errmsg(db));
 		}
 	}
 
@@ -543,7 +548,7 @@ album_art_t *album_art_find(int64_t album_art_id, image_size_enum image_size)
 
 	if (return_parent)
 	{ // return parent
-		return album_art_find(album_art_id, JPEG_INV);
+		return album_art_get(album_art_id, JPEG_INV);
 	}
 
 	if (album_art && !_is_album_art_valid(album_art))
@@ -577,7 +582,7 @@ int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 	unsigned char* new_jpeg = NULL;
 	int new_jpeg_size = 0;
 
-	if (!(album_art = album_art_find(album_art_id, JPEG_INV)))
+	if (!(album_art = album_art_get(album_art_id, JPEG_INV)))
 	{
 		return 0;
 	}
@@ -613,13 +618,17 @@ int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 	else
 	{
 		image_s *imdst = image_resize(imsrc, dstw, dsth);
-		if (imsrc != imdst)
+		if (imdst && (imsrc != imdst))
 		{
-			new_jpeg = image_save_to_jpeg_buf(imdst, &new_jpeg_size);
+			if (!(new_jpeg = image_save_to_jpeg_buf(imdst, &new_jpeg_size)))
+			{
+				DPRINTF(E_WARN, L_ARTWORK, "album_art_create_sized(%lld,%d) fail to compress picture\n", (long long)album_art_id, (int)image_size);
+			}
 			image_free(imdst);
 		}
 		else
 		{
+			DPRINTF(E_WARN, L_ARTWORK, "album_art_create_sized(%lld,%d) fail to resize picture\n", (long long)album_art_id, (int)image_size);
 			leave_as_is = 1;
 		}
 	}
@@ -635,8 +644,9 @@ int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 		}
 		else
 		{
-			album_art_t *sized_album_art = (album_art_t*)calloc(1, sizeof(album_art_t));
-			if (sized_album_art)
+			album_art_t *sized_album_art;
+
+			if ((sized_album_art = (album_art_t*)calloc(1, sizeof(album_art_t))))
 			{
 				sized_album_art->is_blob = 1;
 				sized_album_art->image.blob.data = new_jpeg;
@@ -646,10 +656,12 @@ int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 				sized_album_art->timestamp = album_art->timestamp;
 				res = _insert_sized_album_art(sized_album_art, image_size, album_art_id);
 				album_art_free(sized_album_art);
+
+				DPRINTF(E_DEBUG, L_ARTWORK, "album_art_create_sized(%lld,%d) successfully added new element [%lld]\n", (long long)album_art_id, (int)image_size, (long long)res);
 			}
 			else
 			{
-				DPRINTF(E_DEBUG, L_ARTWORK, "album_art_create_sized fail to allocate album_art_t struct\n");
+				DPRINTF(E_WARN, L_ARTWORK, "album_art_create_sized(%lld,%d) fail to alocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
 			}
 		}
 		free(new_jpeg);
