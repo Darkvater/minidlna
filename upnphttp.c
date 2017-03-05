@@ -1490,7 +1490,6 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 
 	if (!album_art) {
 
-		DPRINTF(E_DEBUG, L_HTTP, "Album art doesn't exist in cache, adding new entry %lld-%d\n", album_art_id, (int)size_type);
 #if USE_FORK
 		newpid = process_fork(h->req_client);
 		if (newpid > 0)
@@ -1501,10 +1500,18 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 #endif
 		if (size_type != JPEG_INV)
 		{
-			int64_t resized_album_art_id = album_art_create_sized(album_art_id, size_type);
-			if (resized_album_art_id)
+			int64_t resized_album_art_id;
+
+			DPRINTF(E_INFO, L_HTTP, "Album art doesn't exist in cache, adding new entry %lld-%d\n", album_art_id, (int)size_type);
+
+			if ((resized_album_art_id = album_art_create_sized(album_art_id, size_type)))
 			{
+				DPRINTF(E_DEBUG, L_HTTP, "Sized album art %lld-%d created, ID=%lld\n", album_art_id, (int)size_type, (long long)resized_album_art_id);
 				album_art = album_art_get(album_art_id, size_type);
+			}
+			else
+			{
+				DPRINTF(E_WARN, L_HTTP, "Unable to create sized album art %lld-%d\n", album_art_id, (int)size_type);
 			}
 		}
 

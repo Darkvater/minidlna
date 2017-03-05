@@ -52,6 +52,8 @@ static const image_size_type_t image_size_types[] = {
 	{ JPEG_INV, "", 0, 0 }
 };
 
+static const image_size_enum DEF_ALBUM_ART_BUILD_LEVEL = JPEG_SM;
+
 static const image_size_type_t *_get_image_size_type(image_size_enum size_type)
 {
 	if (size_type < JPEG_TN || size_type > JPEG_MED) size_type = JPEG_INV;
@@ -402,10 +404,127 @@ static int64_t _insert_sized_album_art(const album_art_t *album_art, image_size_
 	}
 }
 
+static inline image_s *_load_image_from_album_art(const album_art_t *album_art)
+{
+	if (album_art->is_blob)
+	{
+		return image_new_from_jpeg(NULL, 0, album_art->image.blob.data, album_art->image.blob.size, 1, ROTATE_NONE);
+	}
+	else
+	{
+		return image_new_from_jpeg(album_art->image.path, 1, NULL, 0, 1, ROTATE_NONE);
+	}
+}
+
+static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_id, image_size_enum image_size, time_t timestamp)
+{
+	const image_size_type_t *image_size_type;
+	int dstw, dsth;
+	int leave_as_is = 0;
+	unsigned char* new_jpeg = NULL;
+	int new_jpeg_size = 0;
+
+	if (!(image_size_type = _get_image_size_type(image_size)))
+	{
+		return 0;
+	}
+
+	if (imsrc->width > imsrc->height)
+	{
+		dstw = image_size_type->width;
+		dsth = (imsrc->height << 8) / ((imsrc->width << 8) / dstw);
+	}
+	else
+	{
+		dsth = image_size_type->height;
+		dstw = (imsrc->width << 8) / ((imsrc->height << 8) / dsth);
+	}
+
+	if (dstw > imsrc->width && dsth > imsrc->height)
+	{ // don't upsize
+		leave_as_is = 1;
+	}
+	else
+	{
+		image_s *imdst = image_resize(imsrc, dstw, dsth);
+		if (imdst && (imsrc != imdst))
+		{
+			if (!(new_jpeg = image_save_to_jpeg_buf(imdst, &new_jpeg_size)))
+			{
+				DPRINTF(E_WARN, L_ARTWORK, "_create_sized_from_image(%lld,%d) fail to compress picture\n", (long long)album_art_id, (int)image_size);
+			}
+			image_free(imdst);
+		}
+		else
+		{
+			DPRINTF(E_WARN, L_ARTWORK, "_create_sized_from_image(%lld,%d) fail to resize picture\n", (long long)album_art_id, (int)image_size);
+			leave_as_is = 1;
+		}
+	}
+
+	if (leave_as_is || new_jpeg)
+	{
+		int64_t res = 0;
+
+		if (leave_as_is)
+		{
+			res = _insert_sized_album_art(NULL, image_size, album_art_id);
+		}
+		else
+		{
+			album_art_t *sized_album_art;
+
+			if ((sized_album_art = (album_art_t*)calloc(1, sizeof(album_art_t))))
+			{
+				sized_album_art->is_blob = 1;
+				sized_album_art->image.blob.data = new_jpeg;
+				new_jpeg = NULL;
+				sized_album_art->image.blob.size = new_jpeg_size;
+				sized_album_art->checksum = djb_hash(sized_album_art->image.blob.data, sized_album_art->image.blob.size);
+				sized_album_art->timestamp = timestamp;
+				res = _insert_sized_album_art(sized_album_art, image_size, album_art_id);
+				album_art_free(sized_album_art);
+
+				DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) successfully added new element [%lld]\n", (long long)album_art_id, (int)image_size, (long long)res);
+			}
+			else
+			{
+				DPRINTF(E_WARN, L_ARTWORK, "_create_sized_from_image(%lld,%d) fail to alocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
+			}
+		}
+		free(new_jpeg);
+		return res;
+	}
+
+	return 0;
+}
+
+static void _create_sized(const album_art_t *album_art, int64_t album_art_id, image_size_enum build_level)
+{
+	image_s *imsrc;
+	image_size_enum i;
+
+	if (!(imsrc = _load_image_from_album_art(album_art)))
+	{
+		return;
+	}
+
+	for(i=JPEG_TN; i<=build_level; ++i)
+	{
+		if (!_create_sized_from_image(imsrc, album_art_id, i, album_art->timestamp))
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized(%lld,%d) fail to create sized variant\n", (long long)album_art_id, (int)i);
+		}
+	}
+
+	image_free(imsrc);
+}
+
 int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size)
 {
 	album_art_t *album_art = NULL;
 	time_t old_timestamp = 0;
+	int new_album_art = 0;
 	int64_t res = 0;
 
 	if (image_data && image_data_size)
@@ -430,7 +549,12 @@ int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_
 	}
 	else
 	{ // insert new record
-		res = _insert_album_art(album_art);
+		new_album_art = (res = _insert_album_art(album_art)) != 0;
+	}
+
+	if (new_album_art)
+	{
+		_create_sized(album_art, res, DEF_ALBUM_ART_BUILD_LEVEL);
 	}
 
 	album_art_free(album_art);
@@ -560,27 +684,11 @@ album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size)
 	return album_art;
 }
 
-static inline image_s *_load_image_from_album_art(const album_art_t *album_art)
-{
-	if (album_art->is_blob)
-	{
-		return image_new_from_jpeg(NULL, 0, album_art->image.blob.data, album_art->image.blob.size, 1, ROTATE_NONE);
-	}
-	else
-	{
-		return image_new_from_jpeg(album_art->image.path, 1, NULL, 0, 1, ROTATE_NONE);
-	}
-}
-
 int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 {
 	album_art_t *album_art;
 	image_s *imsrc;
-	const image_size_type_t *image_size_type;
-	int dstw, dsth;
-	int leave_as_is = 0;
-	unsigned char* new_jpeg = NULL;
-	int new_jpeg_size = 0;
+	int64_t res;
 
 	if (!(album_art = album_art_get(album_art_id, JPEG_INV)))
 	{
@@ -593,84 +701,12 @@ int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 		return 0;
 	}
 
-	if (!(image_size_type = _get_image_size_type(image_size)))
-	{
-		album_art_free(album_art);
-		image_free(imsrc);
-		return 0;
-	}
+	res = _create_sized_from_image(imsrc, album_art_id, image_size, album_art->timestamp);
 
-	if (imsrc->width > imsrc->height)
-	{
-		dstw = image_size_type->width;
-		dsth = (imsrc->height << 8) / ((imsrc->width << 8) / dstw);
-	}
-	else
-	{
-		dsth = image_size_type->height;
-		dstw = (imsrc->width << 8) / ((imsrc->height << 8) / dsth);
-	}
-
-	if (dstw > imsrc->width && dsth > imsrc->height)
-	{ // don't upsize
-		leave_as_is = 1;
-	}
-	else
-	{
-		image_s *imdst = image_resize(imsrc, dstw, dsth);
-		if (imdst && (imsrc != imdst))
-		{
-			if (!(new_jpeg = image_save_to_jpeg_buf(imdst, &new_jpeg_size)))
-			{
-				DPRINTF(E_WARN, L_ARTWORK, "album_art_create_sized(%lld,%d) fail to compress picture\n", (long long)album_art_id, (int)image_size);
-			}
-			image_free(imdst);
-		}
-		else
-		{
-			DPRINTF(E_WARN, L_ARTWORK, "album_art_create_sized(%lld,%d) fail to resize picture\n", (long long)album_art_id, (int)image_size);
-			leave_as_is = 1;
-		}
-	}
 	image_free(imsrc);
-
-	if (leave_as_is || new_jpeg)
-	{
-		int64_t res = 0;
-
-		if (leave_as_is)
-		{
-			res = _insert_sized_album_art(NULL, image_size, album_art_id);
-		}
-		else
-		{
-			album_art_t *sized_album_art;
-
-			if ((sized_album_art = (album_art_t*)calloc(1, sizeof(album_art_t))))
-			{
-				sized_album_art->is_blob = 1;
-				sized_album_art->image.blob.data = new_jpeg;
-				new_jpeg = NULL;
-				sized_album_art->image.blob.size = new_jpeg_size;
-				sized_album_art->checksum = djb_hash(album_art->image.blob.data, album_art->image.blob.size);
-				sized_album_art->timestamp = album_art->timestamp;
-				res = _insert_sized_album_art(sized_album_art, image_size, album_art_id);
-				album_art_free(sized_album_art);
-
-				DPRINTF(E_DEBUG, L_ARTWORK, "album_art_create_sized(%lld,%d) successfully added new element [%lld]\n", (long long)album_art_id, (int)image_size, (long long)res);
-			}
-			else
-			{
-				DPRINTF(E_WARN, L_ARTWORK, "album_art_create_sized(%lld,%d) fail to alocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
-			}
-		}
-		free(new_jpeg);
-		album_art_free(album_art);
-		return res;
-	}
-
 	album_art_free(album_art);
-	return 0;
+
+	return res;
 }
 
 int album_art_check(int64_t album_art_id)
