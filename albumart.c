@@ -129,7 +129,7 @@ static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, s
 
 	if (image_get_jpeg_resolution(NULL, 0, image_data, image_data_size, &width, &height))
 	{ // currently no format conversion
-		DPRINTF(E_DEBUG, L_ARTWORK, "Embedded album art is a JPEG image\n");
+		DPRINTF(E_DEBUG, L_ARTWORK, "Embedded album art is not in JPEG format\n");
 		return 0;
 	}
 	else
@@ -150,12 +150,15 @@ static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, s
 static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_t image_data_size, const char* path)
 {
 	struct stat st;
-	album_art_t *res = (album_art_t*)calloc(1, sizeof(album_art_t));
-	res->is_blob = 1;
+	album_art_t *res;
 
 	if (lstat(path, &st))
 	{
-		free(res);
+		return NULL;
+	}
+
+	if (!(res = (album_art_t*)calloc(1,sizeof(album_art_t))))
+	{
 		return NULL;
 	}
 
@@ -165,6 +168,7 @@ static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_
 		return NULL;
 	}
 
+	res->is_blob = 1;
 	res->timestamp = st.st_mtime;
 	return res;
 }
