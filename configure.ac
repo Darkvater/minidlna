@@ -157,6 +157,9 @@ AC_CHECK_HEADER(linux/netlink.h,
 AC_ARG_ENABLE([wavpack],
               [AS_HELP_STRING([--enable-wavpack], [Enable support for Wavpack files (default=auto)])])
 
+AC_ARG_ENABLE([libsystemd],
+	      [AS_HELP_STRING([--enable-libsystemd], [Enable systemd-friendly logging])])
+
 ################################################################################################################
 ### Library checks
 
@@ -273,6 +276,20 @@ AS_IF([test "x$enable_wavpack" != "xno"],
 AS_IF([test "x$have_wavpack" != "xno"],
 	[AC_DEFINE([HAVE_WAVPACK], [1], [Define for Wavpack support])],	
 	[AS_IF([test "x$enable_wavpack" = "xyes"],[AC_MSG_ERROR([Wavpack not found or not usable])])])
+
+dnl ##############################################
+dnl # libsystemd
+dnl ##############################################
+
+AS_IF([test "x$enable_libsystemd" != "xno"],
+        [PKG_CHECK_MODULES([SYSTEMD], [libsystemd], [have_libsystemd=yes], [have_libsystemd=no])],
+        [have_wavpack=no])
+
+AS_IF([test "x$have_libsystemd" != "xno"],
+        [AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define for systemd support])],
+        [AS_IF([test "x$enable_libsystemd" = "xyes"],[AC_MSG_ERROR([libsystemd not found or not usable])])])
+
+dnl ##############################################
 
 CFLAGS_SAVE="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"

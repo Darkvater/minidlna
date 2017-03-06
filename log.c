@@ -25,6 +25,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
+
 #include "upnpglobalvars.h"
 #include "log.h"
 
@@ -32,7 +36,7 @@ static FILE *log_fp = NULL;
 static const int _default_log_level = E_WARN;
 int log_level[L_MAX];
 
-const char *facility_name[] = {
+static const char *facility_name[] = {
 	"general",
 	"artwork",
 	"database",
@@ -45,7 +49,7 @@ const char *facility_name[] = {
 	0
 };
 
-const char *level_name[] = {
+static const char *level_name[] = {
 	"off",					// E_OFF
 	"fatal",				// E_FATAL
 	"error",				// E_ERROR
@@ -63,7 +67,7 @@ log_close(void)
 		fclose(log_fp);
 }
 
-int find_matching_name(const char* str, const char* names[]) {
+static int find_matching_name(const char* str, const char* names[]) {
 	if (str == NULL) return -1;
 
 	const char* start = strpbrk(str, ",=");
@@ -147,12 +151,46 @@ log_err(int level, enum _log_facility facility, const char *fname, int lineno, c
 		fprintf(log_fp, "[%04d/%02d/%02d %02d:%02d:%02d] ",
 		        tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
 		        tm->tm_hour, tm->tm_min, tm->tm_sec);
-	}
 
-	if (level)
-		fprintf(log_fp, "%s:%d: %s: ", fname, lineno, level_name[level]);
+		if (level)
+			fprintf(log_fp, "%s:%d: %s: ", fname, lineno, level_name[level]);
+		else
+			fprintf(log_fp, "%s:%d: ", fname, lineno);
+	}
 	else
+	{
+#ifdef HAVE_LOGSYSTEMD
+		switch(level)
+		{
+			case E_FATAL:
+			fputs(SD_CRIT, log_fp);
+			break;
+
+			case E_ERROR:
+			fputs(SD_ERR, log_fp);
+			break;
+
+			case E_WARN:
+			fputs(SD_WARNING, log_fp);
+			break;
+
+			case E_INFO:
+			fputs(SD_INFO, log_fp);
+			break;
+			
+			case E_DEBUG:
+			case E_MAXDEBUG:
+			fputs(SD_DEBUG, log_fp);
+			break;
+		}
 		fprintf(log_fp, "%s:%d: ", fname, lineno);
+#else
+                if (level)
+                        fprintf(log_fp, "%s:%d: %s: ", fname, lineno, level_name[level]);
+                else
+                        fprintf(log_fp, "%s:%d: ", fname, lineno);
+#endif
+	}
 
 	// user log
 	va_start(ap, fmt);
