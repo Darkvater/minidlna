@@ -497,7 +497,7 @@ static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_
 		{
 			album_art_t *album_art;
 
-			if ((album_art = _albumw_art_alloc()))
+			if ((album_art = _album_art_alloc()))
 			{
 				album_art->is_blob = 1;
 				album_art->free_memory_block = 1;
