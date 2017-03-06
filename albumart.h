@@ -45,13 +45,14 @@ typedef union
 typedef struct
 {
 	int is_blob;
+	int free_memory_block;
 	blob_or_path_t image;
 	uint32_t checksum;
 	time_t timestamp;
 } album_art_t;
 
 const char* album_art_get_size_name(image_size_enum image_size);
-int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size);
+int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size, int make_copy);
 int album_art_check(int64_t album_art_id);
 album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size);
 int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size);

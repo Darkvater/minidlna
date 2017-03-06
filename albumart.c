@@ -112,7 +112,7 @@ album_art_update_cond(const char *path)
 		    (album_art || strncmp(dp->d_name, match, ncmp) == 0) )
 		{
 			DPRINTF(E_DEBUG, L_METADATA, "New file %s looks like cover art for %s\n", path, dp->d_name);
-			if ((art_id = album_art_add(file, NULL, 0)))
+			if ((art_id = album_art_add(file, NULL, 0, 0)))
 			{
 				ret = sql_exec(db, "UPDATE DETAILS set ALBUM_ART = %lld where PATH = '%q'", (long long)art_id, file);
 				if( ret != SQLITE_OK )
@@ -123,7 +123,7 @@ album_art_update_cond(const char *path)
 	closedir(dh);
 }
 
-static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, size_t image_data_size)
+static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, size_t image_data_size, int make_copy)
 {
 	int width, height;
 
@@ -134,20 +134,29 @@ static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, s
 	}
 	else
 	{
-		album_art->image.blob.data = malloc(image_data_size);
-		if (!album_art->image.blob.data)
+		if (!make_copy)
 		{
-			DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block [%lld]\n", (long long)image_data_size);
-			return 0;
+			album_art->image.blob.data = (uint8_t*)image_data;
+			album_art->free_memory_block = 0;
 		}
-		memcpy(album_art->image.blob.data, image_data, image_data_size);
+		else
+		{
+			album_art->image.blob.data = malloc(image_data_size);
+			if (!album_art->image.blob.data)
+			{
+				DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block [%lld]\n", (long long)image_data_size);
+				return 0;
+			}
+			memcpy(album_art->image.blob.data, image_data, image_data_size);
+			album_art->free_memory_block = 1;
+		}
 		album_art->image.blob.size = image_data_size;
 		album_art->checksum = djb_hash(image_data, image_data_size);
 		return 1;
 	}
 }
 
-static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_t image_data_size, const char* path)
+static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_t image_data_size, int make_copy, const char* path)
 {
 	struct stat st;
 	album_art_t *res;
@@ -162,7 +171,7 @@ static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_
 		return NULL;
 	}
 
-	if (!_convert_to_jpeg(res, image_data, image_data_size))
+	if (!_convert_to_jpeg(res, image_data, image_data_size, make_copy))
 	{
 		free(res);
 		return NULL;
@@ -236,6 +245,7 @@ add_cached_image:
 			}
 
 			res->is_blob = 0;
+			res->free_memory_block = 1;
 			res->image.path = strdup(file);
 
 			if (lstat(res->image.path, &st))
@@ -481,6 +491,7 @@ static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_
 			if ((sized_album_art = (album_art_t*)calloc(1, sizeof(album_art_t))))
 			{
 				sized_album_art->is_blob = 1;
+				sized_album_art->free_memory_block = 1;
 				sized_album_art->image.blob.data = new_jpeg;
 				new_jpeg = NULL;
 				sized_album_art->image.blob.size = new_jpeg_size;
@@ -524,7 +535,7 @@ static void _create_sized(const album_art_t *album_art, int64_t album_art_id, im
 	image_free(imsrc);
 }
 
-int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size)
+int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size, int make_copy)
 {
 	album_art_t *album_art = NULL;
 	time_t old_timestamp = 0;
@@ -533,7 +544,7 @@ int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_
 
 	if (image_data && image_data_size)
 	{
-		album_art = _create_album_art_from_blob(image_data, image_data_size, path);
+		album_art = _create_album_art_from_blob(image_data, image_data_size, make_copy, path);
 	}
 	if (!album_art)
 	{
@@ -620,6 +631,7 @@ album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size)
 					{
 						album_art->image.path = strdup((const char*)sqlite3_column_text(stmt, 0));
 						album_art->is_blob = 0;
+						album_art->free_memory_block = 1;
 						album_art->checksum = (uint32_t)sqlite3_column_int64(stmt, 1);
 						album_art->timestamp = sqlite3_column_int64(stmt, 2);
 					}
@@ -645,6 +657,7 @@ album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size)
 						}
 						album_art->image.blob.size = nbytes;
 						album_art->is_blob = 1;
+						album_art->free_memory_block = 1;
 						album_art->checksum = (uint32_t)sqlite3_column_int64(stmt, 1);
 						album_art->timestamp = sqlite3_column_int64(stmt, 2);
 					}
@@ -737,6 +750,9 @@ int album_art_check(int64_t album_art_id)
 void album_art_free(album_art_t *album_art)
 {
 	if (!album_art) return;
-	free(album_art->is_blob? (void*)album_art->image.blob.data : (void*)album_art->image.path);
+	if (album_art->free_memory_block)
+	{
+		free(album_art->is_blob? (void*)album_art->image.blob.data : (void*)album_art->image.path);
+	}
 	free(album_art);
 }

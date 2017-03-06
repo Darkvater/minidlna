@@ -521,7 +521,7 @@ insert_directory(const char *name, const char *path, const char *base, const cha
 		return 0;
 	}
 
-	detailID = GetFolderMetadata(name, path, NULL, NULL, album_art_add(path, NULL, 0));
+	detailID = GetFolderMetadata(name, path, NULL, NULL, album_art_add(path, NULL, 0, 0));
 	sql_exec(db, "INSERT into OBJECTS"
 	             " (OBJECT_ID, PARENT_ID, DETAIL_ID, CLASS, NAME) "
 	             "VALUES"

@@ -700,7 +700,7 @@ GetAudioMetadata(const char *path, char *name)
 		m.mime = song.mime;
 	}
 
-	album_art_id = album_art_add(path, song.image, song.image_size);
+	album_art_id = album_art_add(path, song.image, song.image_size, 0);
 	ret = add_entry_to_details(path, file.st_size, file.st_mtime, &m, album_art_id);
 
 	freetags(&song);
@@ -1759,7 +1759,7 @@ video_no_dlna:
 	if( !m.title )
 		m.title = strdup(name);
 
-	album_art = album_art_add(path, m.thumb_data, m.thumb_size);
+	album_art = album_art_add(path, m.thumb_data, m.thumb_size, 0);
 	freetags(&video);
 	lav_close(ctx);
 
