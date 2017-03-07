@@ -159,7 +159,7 @@ log_err(int level, enum _log_facility facility, const char *fname, int lineno, c
 	}
 	else
 	{
-#ifdef HAVE_LOGSYSTEMD
+#ifdef HAVE_LIBSYSTEMD
 		switch(level)
 		{
 			case E_FATAL:
