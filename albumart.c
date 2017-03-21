@@ -541,7 +541,7 @@ static int64_t _create_sized_from_image(const ffimg_t* img, int64_t album_art_id
 			if ((album_art = _album_art_alloc()))
 			{
 				album_art->is_blob = 1;
-				album_art->free_memory_block = 1;
+				album_art->free_memory_block = 0;
 				album_art->image.blob.data = img_resized->packet->data;
 				album_art->image.blob.size = img_resized->packet->size;
 				album_art->checksum = djb_hash(album_art->image.blob.data, album_art->image.blob.size);
