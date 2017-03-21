@@ -101,4 +101,7 @@ start_scanner();
 void
 start_rescanner();
 
+void
+scanner_register_av();
+
 #endif

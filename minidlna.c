@@ -385,6 +385,10 @@ rescan:
 		{
 			start_scanner();
 		}
+		else
+		{
+			scanner_register_av();
+		}
 #else
 		start_scanner();
 #endif

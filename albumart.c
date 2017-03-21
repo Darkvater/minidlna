@@ -29,11 +29,12 @@
 #include <errno.h>
 
 #include "upnpglobalvars.h"
-#include "albumart.h"
+#include "libav.h"
 #include "sql.h"
 #include "utils.h"
-#include "image_utils.h"
+#include "ffimg.h"
 #include "log.h"
+#include "albumart.h"
 
 typedef struct
 {
@@ -135,15 +136,59 @@ album_art_update_cond(const char *path)
 
 static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, size_t image_data_size, int make_copy)
 {
-	int width, height;
+	ffimg_t *img;
 
-	if (image_get_jpeg_resolution(NULL, 0, image_data, image_data_size, &width, &height))
-	{ // currently no format conversion
-		DPRINTF(E_WARN, L_ARTWORK, "Embedded album art is not in JPEG format\n");
+	if (!(img = ffimg_load_from_blob(image_data, image_data_size)))
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "Could not load embedded album art\n");
 		return 0;
 	}
 	else
 	{
+		ffimg_t *img_converted;
+
+		if (ffimg_is_jpeg(img))
+		{
+			ffimg_free(img);
+			img = NULL;
+		}
+		else
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "Embedded album art is %d\n", (int)img->id);
+			if ((img_converted = ffimg_resize(img, -1, -1, 1))) // without resizing, just load (and correct orientation)
+			{
+				ffimg_free(img);
+				img = img_converted;
+			}
+			else
+			{
+				DPRINTF(E_WARN, L_ARTWORK, "Fail to resize embedded album art\n");
+				ffimg_free(img);
+				return 0;
+			}
+
+		}
+	}
+
+	if (img)
+	{
+		album_art->image.blob.data = malloc(img->packet->size);
+		if (!album_art->image.blob.data)
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block [%lld]\n", (long long)img->packet->size);
+			ffimg_free(img);
+			return 0;
+		}
+		memcpy(album_art->image.blob.data, img->packet->data, img->packet->size);
+		album_art->image.blob.size = img->packet->size;
+		album_art->checksum = djb_hash(image_data, image_data_size); // checksum of original album art
+		album_art->free_memory_block = 1;
+		ffimg_free(img);
+		return 1;
+	}
+	else
+	{
+
 		if (!make_copy)
 		{
 			album_art->image.blob.data = (uint8_t*)image_data;
@@ -441,65 +486,47 @@ static int64_t _insert_sized_album_art(const album_art_t *album_art, image_size_
 	}
 }
 
-static inline image_s *_load_image_from_album_art(const album_art_t *album_art)
+static inline ffimg_t *_load_image_from_album_art(const album_art_t *album_art)
 {
 	if (album_art->is_blob)
 	{
-		return image_new_from_jpeg(NULL, 0, album_art->image.blob.data, album_art->image.blob.size, 1, ROTATE_NONE);
+		return ffimg_load_from_blob(album_art->image.blob.data, album_art->image.blob.size);
 	}
 	else
 	{
-		return image_new_from_jpeg(album_art->image.path, 1, NULL, 0, 1, ROTATE_NONE);
+		return ffimg_load_from_file(album_art->image.path);
 	}
 }
 
-static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_id, image_size_enum image_size, time_t timestamp)
+static int64_t _create_sized_from_image(const ffimg_t* img, int64_t album_art_id, image_size_enum image_size, time_t timestamp)
 {
 	const image_size_type_t *image_size_type;
-	int dstw, dsth;
+	int width, height;
 	int leave_as_is = 0;
-	unsigned char* new_jpeg = NULL;
-	int new_jpeg_size = 0;
+	ffimg_t *img_resized = NULL;
 
 	if (!(image_size_type = _get_image_size_type(image_size)))
 	{
 		return 0;
 	}
 
-	if (imsrc->width > imsrc->height)
-	{
-		dstw = image_size_type->width;
-		dsth = (imsrc->height << 8) / ((imsrc->width << 8) / dstw);
-	}
-	else
-	{
-		dsth = image_size_type->height;
-		dstw = (imsrc->width << 8) / ((imsrc->height << 8) / dsth);
-	}
+	width = img->frame->width;
+	height = img->frame->height;
 
-	if (dstw > imsrc->width && dsth > imsrc->height)
+	if (image_size_type->width>width && image_size_type->height>height)
 	{ // don't upsize
 		leave_as_is = 1;
 	}
 	else
 	{
-		image_s *imdst = image_resize(imsrc, dstw, dsth);
-		if (imdst && (imsrc != imdst))
-		{
-			if (!(new_jpeg = image_save_to_jpeg_buf(imdst, &new_jpeg_size)))
-			{
-				DPRINTF(E_INFO, L_ARTWORK, "_create_sized_from_image(%lld,%d) - fail to compress picture\n", (long long)album_art_id, (int)image_size);
-			}
-			image_free(imdst);
-		}
-		else
+		if (!(img_resized = ffimg_resize(img, image_size_type->width, image_size_type->height, 1)))
 		{
 			DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) - fail to resize picture\n", (long long)album_art_id, (int)image_size);
 			leave_as_is = 1;
 		}
 	}
 
-	if (leave_as_is || new_jpeg)
+	if (leave_as_is || img_resized)
 	{
 		int64_t res = 0;
 
@@ -515,11 +542,10 @@ static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_
 			{
 				album_art->is_blob = 1;
 				album_art->free_memory_block = 1;
-				album_art->image.blob.data = new_jpeg;
-				album_art->image.blob.size = new_jpeg_size;
-				album_art->checksum = djb_hash(new_jpeg, new_jpeg_size);
+				album_art->image.blob.data = img_resized->packet->data;
+				album_art->image.blob.size = img_resized->packet->size;
+				album_art->checksum = djb_hash(album_art->image.blob.data, album_art->image.blob.size);
 				album_art->timestamp = timestamp;
-				new_jpeg = NULL; // take ownership
 				res = _insert_sized_album_art(album_art, image_size, album_art_id);
 				album_art_free(album_art);
 
@@ -530,7 +556,7 @@ static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_
 				DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) - fail to alocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
 			}
 		}
-		free(new_jpeg);
+		ffimg_free(img_resized);
 		return res;
 	}
 
@@ -539,23 +565,23 @@ static int64_t _create_sized_from_image(const image_s* imsrc, int64_t album_art_
 
 static void _create_sized(const album_art_t *album_art, int64_t album_art_id, image_size_enum build_level)
 {
-	image_s *imsrc;
+	ffimg_t *img;
 	image_size_enum i;
 
-	if (!(imsrc = _load_image_from_album_art(album_art)))
+	if (!(img = _load_image_from_album_art(album_art)))
 	{
 		return;
 	}
 
 	for(i=JPEG_TN; i<=build_level; ++i)
 	{
-		if (!_create_sized_from_image(imsrc, album_art_id, i, album_art->timestamp))
+		if (!_create_sized_from_image(img, album_art_id, i, album_art->timestamp))
 		{
 			DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized(%lld,%d) - fail to create sized variant\n", (long long)album_art_id, (int)i);
 		}
 	}
 
-	image_free(imsrc);
+	ffimg_free(img);
 }
 
 int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size, int make_copy)
@@ -719,7 +745,7 @@ long)nbytes);
 int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 {
 	album_art_t *album_art;
-	image_s *imsrc;
+	ffimg_t *img;
 	int64_t res;
 
 	if (!(album_art = album_art_get(album_art_id, JPEG_INV)))
@@ -727,15 +753,15 @@ int64_t album_art_create_sized(int64_t album_art_id, image_size_enum image_size)
 		return 0;
 	}
 
-	if (!(imsrc = _load_image_from_album_art(album_art)))
+	if (!(img = _load_image_from_album_art(album_art)))
 	{
 		album_art_free(album_art);
 		return 0;
 	}
 
-	res = _create_sized_from_image(imsrc, album_art_id, image_size, album_art->timestamp);
+	res = _create_sized_from_image(img, album_art_id, image_size, album_art->timestamp);
 
-	image_free(imsrc);
+	ffimg_free(img);
 	album_art_free(album_art);
 
 	return res;

@@ -57,6 +57,30 @@
 #include <avformat.h>
 #endif
 
+#if HAVE_FFMPEG_LIBAVFILTER_AVFILTER_H
+#include <ffmpeg/libavfilter/avfilter.h>
+#include <ffmpeg/libavfilter/buffersrc.h>
+#include <ffmpeg/libavfilter/buffersink.h>
+#elif HAVE_LIBAV_LIBAVFILTER_AVFILTER_H
+#include <libav/libavfilter/avfilter.h>
+#include <libav/libavfilter/buffersrc.h>
+#include <libav/libavfilter/buffersink.h>
+#elif HAVE_LIBAVFILTER_AVFILTER_H
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersrc.h>
+#include <libavfilter/buffersink.h>
+#elif HAVE_FFMPEG_AVFILTER_H
+#include <ffmpeg/avfilter.h>
+#include <ffmpeg/buffersrc.h>
+#include <ffmpeg/buffersink.h>
+#elif HAVE_LIBAV_LIBAVFILTER_H
+#include <libav/avfilter.h>
+#include <libav/buffersrc.h>
+#include <libav/buffersink.h>
+#elif HAVE_AVFILTER_H
+#include <avfilter.h>
+#endif
+
 #ifndef FF_PROFILE_H264_BASELINE
 #define FF_PROFILE_H264_BASELINE 66
 #endif

@@ -925,7 +925,15 @@ init_scanner()
 	setlocale(LC_COLLATE, "");
 
 	av_register_all();
+	avfilter_register_all();
 	av_log_set_level(AV_LOG_PANIC);
+}
+
+void scanner_register_av()
+{
+	av_register_all();
+        avfilter_register_all();
+        av_log_set_level(AV_LOG_PANIC);
 }
 
 static void

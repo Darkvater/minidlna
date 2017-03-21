@@ -29,7 +29,7 @@ minidlnad_SOURCES = minidlna.c upnphttp.c upnpdescgen.c upnpsoap.c \
 			tivo_utils.c tivo_beacon.c tivo_commands.c \
 			playlist.c image_utils.c albumart.c log.c \
 			naturalsort.c captions.c notify_event.c \
-			containers.c tagutils/tagutils.c
+			containers.c tagutils/tagutils.c ffimg.c
 man_MANS = minidlnad.8 minidlna.conf.5
 
 #if NEED_VORBIS
@@ -46,6 +46,8 @@ minidlnad_LDADD = \
 	@LIBSQLITE3_LIBS@ \
 	@LIBAVFORMAT_LIBS@ \
 	@LIBAVUTIL_LIBS@ \
+	@LIBAVCODEC_LIBS@ \
+	@LIBAVFILTER_LIBS@ \
 	@LIBEXIF_LIBS@ \
 	@LIBINTL@ \
 	@LIBICONV@ \
@@ -62,6 +64,8 @@ testupnpdescgen_LDADD = \
 	@LIBSQLITE3_LIBS@ \
 	@LIBAVFORMAT_LIBS@ \
 	@LIBAVUTIL_LIBS@ \
+	@LIBAVCODEC_LIBS@ \
+	@LIBAVFILTER_LIBS@ \
 	@LIBEXIF_LIBS@ \
 	@WAVPACK_LIBS@ \
 	@SYSTEMD_LIBS@ \

@@ -210,6 +210,27 @@ for dir in "" /usr/local $INCLUDE_DIR; do
     if test -n "$dir"; then
         CPPFLAGS="$CPPFLAGS_SAVE -I$dir"
     fi
+    AC_CHECK_HEADERS([libavfilter/avfilter.h ffmpeg/libavfilter/avfilter.h libav/libavfilter/avfilter.h avfilter.h ffmpeg/avfilter.h libav/avfilter.h], [HAVE_LIBAVFILTER=1])
+    if test -z "$HAVE_LIBAVFILTER"; then
+        unset ac_cv_header_avfilter_h
+        unset ac_cv_header_libavfilter_avfilter_h
+        unset ac_cv_header_ffmpeg_avfilter_h
+        unset ac_cv_header_ffmpeg_libavfilter_avfilter_h
+        unset ac_cv_header_libav_avfilter_h
+        unset ac_cv_header_libav_libavfilter_avfilter_h
+        continue
+    fi
+    break
+done
+if test -z "$HAVE_LIBAVFILTER"; then
+    AC_MSG_ERROR([libavfilter headers not found or not usable])
+fi
+
+CPPFLAGS_SAVE="$CPPFLAGS"
+for dir in "" /usr/local $INCLUDE_DIR; do
+    if test -n "$dir"; then
+        CPPFLAGS="$CPPFLAGS_SAVE -I$dir"
+    fi
     AC_CHECK_HEADERS([libavformat/avformat.h ffmpeg/libavformat/avformat.h libav/libavformat/avformat.h avformat.h ffmpeg/avformat.h libav/avformat.h], [HAVE_LIBAVFORMAT=1])
     if test -z "$HAVE_LIBAVFORMAT"; then
         unset ac_cv_header_avformat_h
@@ -481,6 +502,39 @@ if test x"$ac_cv_lib_avformat_av_open_input_file" != x"yes" &&
    AC_MSG_ERROR([Could not find libavformat - part of ffmpeg])
 fi
 AC_SUBST(LIBAVFORMAT_LIBS)
+
+LDFLAGS_SAVE="$LDFLAGS"
+for dir in "" /usr/local $SEARCH_DIR; do
+    if test -n "$dir"; then
+        LDFLAGS="$LDFLAGS -L$dir/lib"
+    fi
+    AC_CHECK_LIB([avcodec], [avcodec_alloc_context3], [LIBAVCODEC_LIBS="-lavcodec"],
+                 [AC_CHECK_LIB([avcodec], [avcodec_open2], [LIBAVCODEC_LIBS="-lavcodec"],
+                  [unset ac_cv_lib_avcodec_avcodec_alloc_context3; unset ac_cv_lib_avcodec_avcodec_open2; LDFLAGS="$LDFLAGS_SAVE"; continue])])
+    break
+done
+if test x"$ac_cv_lib_avcodec_avcodec_alloc_context3" != x"yes" &&
+   test x"$ac_cv_lib_avcodec_avcodec_open2" != x"yes"; then
+   AC_MSG_ERROR([Could not find libavcodec - part of ffmpeg])
+fi
+AC_SUBST(LIBAVCODEC_LIBS)
+
+LDFLAGS_SAVE="$LDFLAGS"
+for dir in "" /usr/local $SEARCH_DIR; do
+    if test -n "$dir"; then
+        LDFLAGS="$LDFLAGS -L$dir/lib"
+    fi
+    AC_CHECK_LIB([avfilter], [avfilter_graph_alloc], [LIBAVFILTER_LIBS="-lavfilter"],
+                 [AC_CHECK_LIB([avfilter], [avfilter_graph_create_filter], [LIBAVFILTER_LIBS="-lavfilter"],
+                  [unset ac_cv_lib_avfilter_avfilter_graph_alloc; unset ac_cv_lib_avfilter_graph_create_filter; LDFLAGS="$LDFLAGS_SAVE"; continue])])
+    break
+done
+if test x"$ac_cv_lib_avfilter_avfilter_graph_alloc" != x"yes" &&
+   test x"$ac_cv_lib_avfilter_graph_create_filter" != x"yes"; then
+   AC_MSG_ERROR([Could not find libavfilter - part of ffmpeg])
+fi
+AC_SUBST(LIBAVFILTER_LIBS)
+
 
 AC_CHECK_LIB(avutil ,[av_rescale_q], [LIBAVUTIL_LIBS="-lavutil"], [AC_MSG_ERROR([Could not find libavutil - part of ffmpeg])])
 AC_SUBST(LIBAVUTIL_LIBS)
