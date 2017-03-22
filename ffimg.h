@@ -14,7 +14,10 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with MiniDLNA. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
+
+#ifndef __FFIMG_H__
+#define __FFIMG_H__
 
 typedef struct
 {
@@ -30,4 +33,7 @@ ffimg_t *ffimg_load_from_file(const char *imgpath);
 ffimg_t *ffimg_load_from_blob(const void *data, size_t data_size);
 ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg);
 ffimg_t *ffimg_clone(const ffimg_t *img);
-int ffimg_is_jpeg(const ffimg_t *img);
+int ffimg_is_supported(const ffimg_t *img);
+void ffimg_get_dimensions(const ffimg_t *img, int *width, int *height);
+
+#endif

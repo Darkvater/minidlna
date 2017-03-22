@@ -14,26 +14,26 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with MiniDLNA. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
+
 #include "config.h"
 #include "log.h"
 #include "libav.h"
 #include "ffimg.h"
 
+
 /*
 	Based on http://jpegclub.org/exif_orientation.html
 */
-static const char* _get_filter_from_orientation(const AVFrame* frame, int *dimensions_swapped)
+static const char *_get_filter_from_orientation(const AVFrame* frame, int *dimensions_swapped)
 {
 	AVDictionary *dict;
 	AVDictionaryEntry *oentry;
 	int orientation;
 
-	dict = av_frame_get_metadata(frame);
-	if (!dict) return NULL;
-	oentry = av_dict_get(dict, "Orientation", NULL, 0);
-	if (!oentry) return NULL;
-	switch (orientation = atoi(oentry->value))
+	if (!(dict = av_frame_get_metadata(frame))) return NULL;
+	if (!(oentry = av_dict_get(dict, "Orientation", NULL, 0))) return NULL;
+	switch ((orientation = atoi(oentry->value)))
 	{
 	case 2:
 		*dimensions_swapped = 0;
@@ -68,7 +68,44 @@ static const char* _get_filter_from_orientation(const AVFrame* frame, int *dimen
 	}
 }
 
-static void _fill_ofilter(char *dst, size_t dst_size, size_t *len, const AVFrame *frame)
+static int _get_density(const AVFrame *frame, int *XResolution, int *YResolution, int *ResolutionUnit)
+{
+	AVDictionary *dict;
+	AVDictionaryEntry *e;
+	int res = 0;
+
+	if (!(dict = av_frame_get_metadata(frame)))
+	{
+		return 0;
+	}
+
+	if ((e = av_dict_get(dict, "XResolution", NULL, 0)))
+	{
+		*XResolution = atoi(e->value);
+		res += 1;
+	}
+
+	if ((e = av_dict_get(dict, "YResolution", NULL, 0)))
+        {
+                *YResolution = atoi(e->value);
+                res += 1;
+        }
+
+	if ((e = av_dict_get(dict, "ResolutionUnit", NULL, 0)))
+        {
+                switch((*ResolutionUnit = atoi(e->value)))
+		{
+			case 2:
+			case 3:
+	                res += 1;
+			break;
+		}
+        }
+
+	return (res == 3);
+}
+
+static inline void _fill_ofilter(char *dst, size_t dst_size, size_t *len, const AVFrame *frame)
 {
 	int dimensions_swapped;
 	const char *ofilter;
@@ -78,7 +115,7 @@ static void _fill_ofilter(char *dst, size_t dst_size, size_t *len, const AVFrame
 	*len += snprintf(dst + *len, dst_size - *len, "%s,", ofilter);
 }
 
-static void _fill_scale_filter(char *dst, size_t dst_size, size_t *len, int width, int height)
+static inline void _fill_scale_filter(char *dst, size_t dst_size, size_t *len, int width, int height)
 {
 	if (width == -1 && height == -1) return;
 
@@ -92,7 +129,7 @@ static void _fill_scale_filter(char *dst, size_t dst_size, size_t *len, int widt
 	}
 }
 
-static void _fill_dst_pix_fmts(char *dst, size_t dst_size, size_t *len, const AVCodec *codec)
+static inline void _fill_dst_pix_fmts(char *dst, size_t dst_size, size_t *len, const AVCodec *codec)
 {
 	const enum AVPixelFormat *i;
 
@@ -195,13 +232,13 @@ end:
 
 static void _dump_frame_metadata(const AVFrame* frame)
 {
-	AVDictionary *dict = av_frame_get_metadata(frame);
-	if (dict)
+	AVDictionary *dict;
+	if ((dict = av_frame_get_metadata(frame)))
 	{
 		AVDictionaryEntry *t = NULL;
 		while ((t = av_dict_get(dict, "", t, AV_DICT_IGNORE_SUFFIX)))
 		{
-			DPRINTF(E_DEBUG, L_METADATA, "Metadata: %s -> %s\n", t->key, t->value);
+			DPRINTF(E_DEBUG, L_METADATA, "FF Metadata: %s -> %s\n", t->key, t->value);
 		}
 	}
 }
@@ -209,7 +246,7 @@ static void _dump_frame_metadata(const AVFrame* frame)
 static ffimg_t *_decode_frame(AVFormatContext *format_ctx, const AVCodec *codec)
 {
 	AVCodecContext *codec_ctx;
-	ffimg_t *img = NULL;
+	ffimg_t *img;
 	int err;
 
 	if (!(img = ffimg_alloc()))
@@ -295,7 +332,7 @@ ffimg_t *ffimg_load_from_file(const char *imgpath)
 
 	if (!(iformat = av_find_input_format("image2")))
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to find input format\n");
+		DPRINTF(E_ERROR, L_METADATA, "load_from_file: Unable to find image2 input format\n");
 		goto done;
 	}
 
@@ -403,7 +440,7 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 
 	if (!(encoder_codec = avcodec_find_encoder_by_name(to_jpeg ? "mjpeg" : "png")))
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Couldn't find a encoder\n");
+		DPRINTF(E_ERROR, L_METADATA, "resize: Couldn't find a encoder\n");
 		return NULL;
 	}
 
@@ -458,9 +495,25 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 	}
 	else
 	{
+		int XResolution = -1, YResolution = -1, ResolutionUnit = -1;
+
 		encoder_codec_ctx->compression_level = 9;
 		encoder_codec_ctx->flags |= AV_CODEC_FLAG_INTERLACED_DCT; // progresive
 		av_dict_set(&enc_options, "pred", "none", 0);
+
+		if (_get_density(img->frame, &XResolution, &YResolution, &ResolutionUnit) && (XResolution == YResolution))
+		{
+			switch(ResolutionUnit)
+			{
+				case 2: // inch
+				av_dict_set_int(&enc_options, "dpi", XResolution, 0);
+				break;
+
+				case 3: // cm
+				av_dict_set_int(&enc_options, "dpm", XResolution*100, 0);
+				break;
+			}
+		}
 	}
 
 	if (avcodec_open2(encoder_codec_ctx, encoder_codec, &enc_options) < 0)
@@ -517,7 +570,23 @@ ffimg_t *ffimg_clone(const ffimg_t *img)
 	}
 }
 
-int ffimg_is_jpeg(const ffimg_t *img)
+/*
+	JPEG for now
+ */
+int ffimg_is_supported(const ffimg_t *img)
 {
 	return img->id == AV_CODEC_ID_MJPEG;
+}
+
+void ffimg_get_dimensions(const ffimg_t *img, int *width, int *height)
+{
+	int dimensions_swapped;
+	const char *ofilter;
+
+	if (!(ofilter = _get_filter_from_orientation(img->frame, &dimensions_swapped)))
+	{
+		dimensions_swapped = 0;
+	}
+	*width = dimensions_swapped? img->frame->height : img->frame->width;
+	*height = dimensions_swapped? img->frame->width : img->frame->height;
 }

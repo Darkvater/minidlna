@@ -147,7 +147,7 @@ static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, s
 	{
 		ffimg_t *img_converted;
 
-		if (ffimg_is_jpeg(img))
+		if (ffimg_is_supported(img))
 		{
 			ffimg_free(img);
 			img = NULL;
@@ -510,8 +510,7 @@ static int64_t _create_sized_from_image(const ffimg_t* img, int64_t album_art_id
 		return 0;
 	}
 
-	width = img->frame->width;
-	height = img->frame->height;
+	ffimg_get_dimensions(img, &width, &height);
 
 	if (image_size_type->width>width && image_size_type->height>height)
 	{ // don't upsize
