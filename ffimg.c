@@ -530,7 +530,7 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 		}
 	}
 
-	if (!(err = avcodec_open2(encoder_codec_ctx, encoder_codec, &enc_options)))
+	if ((err = avcodec_open2(encoder_codec_ctx, encoder_codec, &enc_options)))
 	{
 		DPRINTF(E_ERROR, L_METADATA, "resize: Failed to open the encoder\n");
 		av_dict_free(&enc_options);
