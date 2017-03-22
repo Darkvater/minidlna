@@ -134,7 +134,31 @@ album_art_update_cond(const char *path)
 	closedir(dh);
 }
 
-static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, size_t image_data_size, int make_copy)
+static ffimg_t *_convert_unsupported_image(ffimg_t *img)
+{
+	ffimg_t *img_converted;
+
+	if (ffimg_is_supported(img))
+	{
+		return img;
+	}
+
+	DPRINTF(E_DEBUG, L_METADATA, "Album art codec id is %d\n", (int)img->id);
+	if ((img_converted = ffimg_resize(img, -1, -1, 1))) // without resizing, just load (and correct orientation)
+        {
+        	ffimg_free(img);
+                return img_converted;
+        }
+        else
+        {
+		DPRINTF(E_WARN, L_ARTWORK, "Fail to convert album art\n");
+                ffimg_free(img);
+                return NULL;
+        }
+
+}
+
+static int _convert_blob_to_jpeg(album_art_t *album_art, const uint8_t *image_data, size_t image_data_size, int make_copy)
 {
 	ffimg_t *img;
 
@@ -145,35 +169,25 @@ static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, s
 	}
 	else
 	{
-		ffimg_t *img_converted;
-
-		if (ffimg_is_supported(img))
+		ffimg_t *img_converted = _convert_unsupported_image(img);
+		if (!img_converted)
+		{
+			return 0;
+		}
+		else if (img_converted == img)
 		{
 			ffimg_free(img);
 			img = NULL;
 		}
 		else
 		{
-			DPRINTF(E_DEBUG, L_ARTWORK, "Embedded album art is %d\n", (int)img->id);
-			if ((img_converted = ffimg_resize(img, -1, -1, 1))) // without resizing, just load (and correct orientation)
-			{
-				ffimg_free(img);
-				img = img_converted;
-			}
-			else
-			{
-				DPRINTF(E_WARN, L_ARTWORK, "Fail to resize embedded album art\n");
-				ffimg_free(img);
-				return 0;
-			}
-
+			img = img_converted;
 		}
 	}
 
 	if (img)
 	{
-		album_art->image.blob.data = malloc(img->packet->size);
-		if (!album_art->image.blob.data)
+		if (!(album_art->image.blob.data = malloc(img->packet->size)))
 		{
 			DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block [%lld]\n", (long long)img->packet->size);
 			ffimg_free(img);
@@ -211,6 +225,66 @@ static int _convert_to_jpeg(album_art_t *album_art, const uint8_t *image_data, s
 	}
 }
 
+static album_art_t *_create_from_img(const ffimg_t *img, int checksum, time_t timestamp)
+{
+	album_art_t *res;
+	if (!(res = _album_art_alloc()))
+	{
+		return NULL;
+	}
+
+	if (!(res->image.blob.data = malloc(img->packet->size)))
+	{
+		free(res);
+		return NULL;
+	}
+	
+	memcpy(res->image.blob.data, img->packet->data, img->packet->size);
+	res->image.blob.size = img->packet->size;
+	res->is_blob = 1;
+	res->free_memory_block = 1;
+	res->checksum = checksum;
+	res->timestamp = timestamp;
+	return res;
+}
+
+static album_art_t *_convert_to_jpeg(album_art_t *album_art)
+{
+	ffimg_t *img;
+	album_art_t *cnv_album_art;
+
+	if (!(img = ffimg_load_from_file(album_art->image.path)))
+	{
+		DPRINTF(E_DEBUG, L_ARTWORK, "Cannot load album art from %s\n", album_art->image.path);
+		album_art_free(album_art);
+		return NULL;
+	}
+	else
+	{
+		ffimg_t *img_converted = _convert_unsupported_image(img);
+		if (!img_converted)
+		{
+			album_art_free(album_art);
+			return NULL;
+		}
+		else if (img == img_converted)
+		{
+			ffimg_free(img);
+			return album_art;
+		}
+		else
+		{
+			img = img_converted;
+		}
+	}
+
+	cnv_album_art = _create_from_img(img, album_art->checksum, album_art->timestamp);
+
+	ffimg_free(img);
+	album_art_free(album_art);
+	return cnv_album_art;
+}
+
 static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_t image_data_size, int make_copy, const char* path)
 {
 	struct stat st;
@@ -226,7 +300,7 @@ static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_
 		return NULL;
 	}
 
-	if (!_convert_to_jpeg(res, image_data, image_data_size, make_copy))
+	if (!_convert_blob_to_jpeg(res, image_data, image_data_size, make_copy))
 	{
 		free(res);
 		return NULL;
@@ -235,6 +309,13 @@ static album_art_t *_create_album_art_from_blob(const uint8_t *image_data, size_
 	res->is_blob = 1;
 	res->timestamp = st.st_mtime;
 	return res;
+}
+
+
+static inline int _check_file_specific_album_art_file(char *p, size_t s, const char *path, const char *suffix)
+{
+	snprintf(p, s, "%s.%s", path, suffix);
+        return access(p, R_OK);
 }
 
 static album_art_t *_find_album_art(const char *path)
@@ -256,69 +337,86 @@ static album_art_t *_find_album_art(const char *path)
 		dir = path;
 		goto check_dir;
 	}
+
 	strncpyt(mypath, path, sizeof(mypath));
 	dir = dirname(mypath);
 
 	/* First look for file-specific cover art */
-	snprintf(file, sizeof(file), "%s.cover.jpg", path);
-	ret = access(file, R_OK);
-	if( ret != 0 )
+	for (album_art_name = album_art_names; album_art_name; album_art_name = album_art_name->next)
 	{
-		strncpyt(file, path, sizeof(file));
-		p = strrchr(file, '.');
-		if( p )
-		{
-			strcpy(p, ".jpg");
-			ret = access(file, R_OK);
-		}
-		if( ret != 0 )
-		{
-			p = strrchr(file, '/');
-			if( p )
-			{
-				memmove(p+2, p+1, file+MAXPATHLEN-p-2);
-				p[1] = '.';
-				ret = access(file, R_OK);
-			}
-		}
+		if (!(ret = _check_file_specific_album_art_file(file, sizeof(file), path, album_art_name->name)))
+			goto add_cached_image;
 	}
-	if (!ret) goto add_cached_image;
+
+	// with changed file extension
+	strncpyt(file, path, sizeof(file));
+	if ((p = strrchr(file, '.')))
+	{
+		strcpy(p, ".jpg");
+		if (!(ret = access(file, R_OK))) goto add_cached_image;
+
+		strcpy(p, ".png");
+		if (!(ret = access(file, R_OK))) goto add_cached_image;
+
+		strcpy(p, ".webp");
+		if (!(ret = access(file, R_OK))) goto add_cached_image;
+	}
+
+	// hidden file(s)
+	strcpy(p, ".jpg");
+	if ((p = strrchr(file, '/')))
+	{
+		char *p1;
+		
+		memmove(p+2, p+1, file+MAXPATHLEN-p-2);
+		p[1] = '.';
+		if (!(ret = access(file, R_OK))) goto add_cached_image;
+
+		if (!(p1 = strrchr(file, '.'))) goto check_dir;
+		
+		strcpy(p1, ".png");
+                if (!(ret = access(file, R_OK))) goto add_cached_image;
+
+                strcpy(p1, ".webp");
+                if (!(ret = access(file, R_OK))) goto add_cached_image;
+	}
 
 check_dir:
 	/* Then fall back to possible generic cover art file names */
 	for (album_art_name = album_art_names; album_art_name; album_art_name = album_art_name->next)
 	{
 		snprintf(file, sizeof(file), "%s/%s", dir, album_art_name->name);
-		if (access(file, R_OK) == 0)
+		if ((ret = access(file, R_OK))) continue;
+
 add_cached_image:
+		DPRINTF(E_DEBUG, L_ARTWORK, "Found album art in %s\n", file);
+		if (!(res = _album_art_alloc()))
 		{
-			DPRINTF(E_DEBUG, L_ARTWORK, "Found album art in %s\n", file);
-			if (!(res = _album_art_alloc()))
-			{
-				return NULL;
-			}
-
-			res->is_blob = 0;
-			res->free_memory_block = 1;
-			res->image.path = strdup(file);
-
-			if (lstat(file, &st))
-			{
-				free(res->image.path);
-				free(res);
-				return NULL;
-			}
-
-			if (!djb_hash_from_file(file, &res->checksum))
-			{
-				free(res->image.path);
-				free(res);
-				return NULL;
-			}
-
-			res->timestamp = st.st_mtime;
-			return res;
+			return NULL;
 		}
+
+		res->is_blob = 0;
+		res->free_memory_block = 1;
+		res->image.path = strdup(file);
+
+		if (lstat(file, &st))
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "Could not acces %s", file);
+			free(res->image.path);
+			free(res);
+			return NULL;
+		}
+
+		if (!djb_hash_from_file(file, &res->checksum))
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "Could not calculate checksum of %s\n", file);
+			free(res->image.path);
+			free(res);
+			return NULL;
+		}
+
+		res->timestamp = st.st_mtime;
+		return res;
 	}
 
 	return res;
@@ -596,14 +694,16 @@ int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_
 	}
 	if (!album_art)
 	{
-		album_art = _find_album_art(path);
+		if ((album_art = _find_album_art(path)))
+		{
+			album_art = _convert_to_jpeg(album_art);
+		}
 	}
 
 	// no album art
 	if (!album_art) return 0;
 
-	res = _find_album_art_by_checksum(album_art->checksum, &old_timestamp);
-	if (res)
+	if ((res = _find_album_art_by_checksum(album_art->checksum, &old_timestamp)))
 	{ // update record
 		if (album_art->timestamp != old_timestamp)
 		{
