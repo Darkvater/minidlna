@@ -68,7 +68,16 @@ static const char *_get_filter_from_orientation(const AVFrame* frame, int *dimen
 	}
 }
 
-static int _get_density(const AVFrame *frame, int *XResolution, int *YResolution, int *ResolutionUnit)
+static inline int _parse_rational(const char *value, AVRational *r)
+{
+	char *p;
+	if (!(r->num = strtol(value, &p, 10))) return 0;
+	if (*p != ':') return 0;
+	if (!(r->den = strtol(p+1, NULL, 10))) return 0;
+	return 1;
+}
+
+static int _get_density(const AVFrame *frame, AVRational *XResolution, AVRational *YResolution, int *ResolutionUnit)
 {
 	AVDictionary *dict;
 	AVDictionaryEntry *e;
@@ -81,14 +90,12 @@ static int _get_density(const AVFrame *frame, int *XResolution, int *YResolution
 
 	if ((e = av_dict_get(dict, "XResolution", NULL, 0)))
 	{
-		*XResolution = atoi(e->value);
-		res += 1;
+		if (_parse_rational(e->value, XResolution)) res += 1;
 	}
 
 	if ((e = av_dict_get(dict, "YResolution", NULL, 0)))
         {
-                *YResolution = atoi(e->value);
-                res += 1;
+                if (_parse_rational(e->value, YResolution)) res += 1;
         }
 
 	if ((e = av_dict_get(dict, "ResolutionUnit", NULL, 0)))
@@ -140,7 +147,7 @@ static inline void _fill_dst_pix_fmts(char *dst, size_t dst_size, size_t *len, c
 		if (i != codec->pix_fmts)
 		{
 			dst[*len] = '|';
-			*len += 1;
+			if ((*len += 1) >= dst_size) break;
 		}
 		*len += snprintf(dst + *len, dst_size - *len, "%d", (int)(*i));
 	}
@@ -338,19 +345,19 @@ ffimg_t *ffimg_load_from_file(const char *imgpath)
 
 	if ((err = avformat_open_input(&format_ctx, imgpath, iformat, NULL)) < 0)
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to open input file\n");
+		DPRINTF(E_WARN, L_METADATA, "load_from_file: Unable to open input file %s\n", imgpath);
 		goto done;
 	}
 
 	if ((err = avformat_find_stream_info(format_ctx, NULL)) < 0)
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to find stream info\n");
+		DPRINTF(E_INFO, L_METADATA, "load_from_file: Unable to find stream info in %s\n", imgpath);
 		goto done;
 	}
 
 	if ((err = av_find_best_stream(format_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &codec, 0)) < 0)
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to find required stream\n");
+		DPRINTF(E_INFO, L_METADATA, "load_from_file: Unable to find required stream in %s\n", imgpath);
 		goto done;
 	}
 
@@ -386,6 +393,7 @@ ffimg_t *ffimg_load_from_blob(const void *data, size_t data_size)
 
 	if (!(format_ctx->pb = avio_alloc_context(av_data, (int)data_size, 0, NULL, NULL, NULL, NULL)))
 	{
+		DPRINTF(E_INFO, L_METADATA, "load_from_blob: Unable to allocate IO context\n");
 		av_free(av_data);
 		avformat_free_context(format_ctx);
 		return 0;
@@ -393,19 +401,19 @@ ffimg_t *ffimg_load_from_blob(const void *data, size_t data_size)
 
 	if ((err = avformat_open_input(&format_ctx, NULL, NULL, NULL)) < 0)
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to open input stream\n");
+		DPRINTF(E_WARN, L_METADATA, "load_from_blob: Unable to open input stream\n");
 		goto done;
 	}
 
 	if ((err = avformat_find_stream_info(format_ctx, NULL)) < 0)
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to find stream info\n");
+		DPRINTF(E_INFO, L_METADATA, "load_from_blob: Unable to find stream info\n");
 		goto done;
 	}
 
 	if ((err = av_find_best_stream(format_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &codec, 0)) < 0)
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Unable to find required stream\n");
+		DPRINTF(E_INFO, L_METADATA, "load_from_blob: Unable to find required stream\n");
 		goto done;
 	}
 
@@ -462,6 +470,7 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 
 	if (!frame_filtered)
 	{
+		DPRINTF(E_ERROR, L_METADATA, "resize: Could not filter frame\n");
 		ffimg_free(dst_img);
 		return NULL;
 	}
@@ -495,30 +504,35 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 	}
 	else
 	{
-		int XResolution = -1, YResolution = -1, ResolutionUnit = -1;
+		AVRational XResolution, YResolution;
+		int ResolutionUnit = -1;
 
 		encoder_codec_ctx->compression_level = 9;
 		encoder_codec_ctx->flags |= AV_CODEC_FLAG_INTERLACED_DCT; // progresive
 		av_dict_set(&enc_options, "pred", "none", 0);
 
-		if (_get_density(img->frame, &XResolution, &YResolution, &ResolutionUnit) && (XResolution == YResolution))
+		if (_get_density(img->frame, &XResolution, &YResolution, &ResolutionUnit) && !av_cmp_q(XResolution,YResolution))
 		{
+			DPRINTF(E_DEBUG, L_METADATA, "resize: Resolution=%d:%d, Unit=%d\n", XResolution.num, XResolution.den, ResolutionUnit);
 			switch(ResolutionUnit)
 			{
 				case 2: // inch
-				av_dict_set_int(&enc_options, "dpi", XResolution, 0);
+				av_dict_set_int(&enc_options, "dpi", (int)av_q2d(XResolution), 0);
 				break;
 
-				case 3: // cm
-				av_dict_set_int(&enc_options, "dpm", XResolution*100, 0);
-				break;
+				case 3: // cm -> m
+				{
+					const AVRational h = { 100, 1 };
+					av_dict_set_int(&enc_options, "dpm", (int)av_q2d(av_mul_q(XResolution, h)), 0);
+					break;
+				}
 			}
 		}
 	}
 
-	if (avcodec_open2(encoder_codec_ctx, encoder_codec, &enc_options) < 0)
+	if (!(err = avcodec_open2(encoder_codec_ctx, encoder_codec, &enc_options)))
 	{
-		DPRINTF(E_DEBUG, L_METADATA, "Failed to open the encoder\n");
+		DPRINTF(E_ERROR, L_METADATA, "resize: Failed to open the encoder\n");
 		av_dict_free(&enc_options);
 		avcodec_free_context(&encoder_codec_ctx);
 		ffimg_free(dst_img);
@@ -543,6 +557,7 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 	}
 	else
 	{
+		DPRINTF(E_WARN, L_METADATA, "resize: Unable to encode frame\n");
 		ffimg_free(dst_img);
 		return NULL;
 	}
