@@ -64,6 +64,27 @@ static inline album_art_t *_album_art_alloc()
 	return res;
 }
 
+static inline int _copy_blob(album_art_t *album_art, const void *data, size_t data_size)
+{
+	if (!(album_art->image.blob.data = malloc(data_size)))
+	{
+		return 0;
+	}
+	memcpy(album_art->image.blob.data, data, data_size);
+	album_art->image.blob.size = data_size;
+	album_art->checksum = djb_hash(album_art->image.blob.data, album_art->image.blob.size);
+	album_art->free_memory_block = 1;
+	return 1;
+}
+
+static inline void _assign_blob(album_art_t *album_art, const void *data, size_t data_size)
+{
+	album_art->image.blob.data = (uint8_t*)data;
+	album_art->image.blob.size = data_size;
+	album_art->checksum = djb_hash(album_art->image.blob.data, album_art->image.blob.size);
+	album_art->free_memory_block = 0;
+}
+
 image_size_enum album_art_get_profile(int width, int height)
 {
 	int i;
@@ -206,41 +227,29 @@ static int _convert_blob_to_jpeg(album_art_t *album_art, const uint8_t *image_da
 
 	if (img)
 	{
-		if (!(album_art->image.blob.data = malloc(img->packet->size)))
+		int res;
+		if (!(res = _copy_blob(album_art, img->packet->data, img->packet->size)))
 		{
-			DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block [%lld]\n", (long long)img->packet->size);
-			ffimg_free(img);
-			return 0;
+			DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block (converted) [%lld]\n", (long long)img->packet->size);
 		}
-		memcpy(album_art->image.blob.data, img->packet->data, img->packet->size);
-		album_art->image.blob.size = img->packet->size;
-		album_art->checksum = djb_hash(image_data, image_data_size); // checksum of original album art
-		album_art->free_memory_block = 1;
 		ffimg_free(img);
-		return 1;
+		return res;
 	}
 	else
 	{
-
+		int res = 1;
 		if (!make_copy)
 		{
-			album_art->image.blob.data = (uint8_t*)image_data;
-			album_art->free_memory_block = 0;
+			_assign_blob(album_art, image_data, image_data_size);
 		}
 		else
 		{
-			album_art->image.blob.data = malloc(image_data_size);
-			if (!album_art->image.blob.data)
+			if (!(res = _copy_blob(album_art, image_data, image_data_size)))
 			{
 				DPRINTF(E_DEBUG, L_ARTWORK, "Cannot allocate memory block [%lld]\n", (long long)image_data_size);
-				return 0;
 			}
-			memcpy(album_art->image.blob.data, image_data, image_data_size);
-			album_art->free_memory_block = 1;
 		}
-		album_art->image.blob.size = image_data_size;
-		album_art->checksum = djb_hash(image_data, image_data_size);
-		return 1;
+		return res;
 	}
 }
 
@@ -657,10 +666,7 @@ static int64_t _create_sized_from_image(const ffimg_t* img, int64_t album_art_id
 			if ((album_art = _album_art_alloc()))
 			{
 				album_art->is_blob = 1;
-				album_art->free_memory_block = 0;
-				album_art->image.blob.data = img_resized->packet->data;
-				album_art->image.blob.size = img_resized->packet->size;
-				album_art->checksum = djb_hash(album_art->image.blob.data, album_art->image.blob.size);
+				_assign_blob(album_art, img_resized->packet->data, img_resized->packet->size);
 				album_art->timestamp = timestamp;
 				res = _insert_sized_album_art(album_art, image_size, album_art_id);
 				album_art_free(album_art);
