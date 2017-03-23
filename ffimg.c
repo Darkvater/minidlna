@@ -431,16 +431,37 @@ done:
 	return img;
 }
 
+static int _filter_frame(const AVFrame *src, int width, int height, const AVCodec *encoder, AVFrame *sink)
+{
+	int filtered = 0, err;
+	AVFilterGraph *filter_graph = NULL;
+        AVFilterContext *src_ctx = NULL;
+        AVFilterContext *sink_ctx = NULL;
+
+	if (!(filter_graph = _create_filter_graph(src, width, height, encoder, &src_ctx, &sink_ctx)))
+        {
+                return 0;
+        }
+
+	if (!(err = av_buffersrc_write_frame(src_ctx, src)))
+        {
+                if (!(err = av_buffersink_get_frame(sink_ctx, sink)))
+                {
+                        filtered = 1;
+                }
+	}
+	avfilter_graph_free(&filter_graph);
+	return filtered;
+
+}
+
 ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 {
-	AVCodecContext *encoder_ctx;
 	AVCodec *encoder;
-	ffimg_t *dst_img = NULL;
-	int err, frame_filtered = 0, frame_encoded = 0;
-	AVFilterGraph *filter_graph = NULL;
-	AVFilterContext *src_ctx = NULL;
-	AVFilterContext *sink_ctx = NULL;
+	AVCodecContext *encoder_ctx;
 	AVDictionary *enc_options = NULL;
+	ffimg_t *dst_img = NULL;
+	int err, frame_encoded = 0;
 
 	if (!(dst_img = ffimg_alloc()))
 	{
@@ -453,30 +474,12 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 		return NULL;
 	}
 
-	if (!(filter_graph = _create_filter_graph(img->frame, width, height, encoder, &src_ctx, &sink_ctx)))
-	{
-		ffimg_free(dst_img);
-		return NULL;
-	}
-
-	if (!(err = av_buffersrc_write_frame(src_ctx, img->frame)))
-	{
-		if (!(err = av_buffersink_get_frame(sink_ctx, dst_img->frame)))
-		{
-			frame_filtered = 1;
-		}
-	}
-
-	avfilter_graph_free(&filter_graph);
-
-	if (!frame_filtered)
+	if (!_filter_frame(img->frame, width, height, encoder, dst_img->frame))
 	{
 		DPRINTF(E_ERROR, L_METADATA, "resize: Could not filter frame\n");
 		ffimg_free(dst_img);
 		return NULL;
 	}
-
-	//err = av_frame_copy_props(dst_img->frame, img->frame);
 
 	if (!(encoder_ctx = avcodec_alloc_context3(encoder)))
 	{

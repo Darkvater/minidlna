@@ -823,8 +823,7 @@ album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size)
 						}
 						else
 						{
-							DPRINTF(E_DEBUG, L_ARTWORK, "album_art_get(%lld,%d) fail to allocate memory block %lld\n", (long long)album_art_id, (int)image_size, (long 
-long)nbytes);
+							DPRINTF(E_DEBUG, L_ARTWORK, "album_art_get(%lld,%d) fail to allocate memory block %lld\n", (long long)album_art_id, (int)image_size, (long long)nbytes);
 						}
 						album_art->image.blob.size = nbytes;
 						album_art->is_blob = 1;
