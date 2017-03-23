@@ -40,16 +40,15 @@ typedef struct
 {
 	image_size_enum type;
 	const char* name;
-	const char* short_name;
 	int width;
 	int height;
 } image_size_type_t;
 
 static const image_size_type_t image_size_types[] = {
-	{ JPEG_TN, "JPEG_TN", "tn", 160, 160 },
-	{ JPEG_SM, "JPEG_SM", "sm", 640, 480 },
-	{ JPEG_MED, "JPEG_MED", "med", 1024, 768 },
-	{ JPEG_LRG, "JPEG_LRG", "lrg", 4096, 4096 },
+	{ JPEG_TN, "JPEG_TN", 160, 160 },
+	{ JPEG_SM, "JPEG_SM", 640, 480 },
+	{ JPEG_MED, "JPEG_MED", 1024, 768 },
+	{ JPEG_LRG, "JPEG_LRG", 4096, 4096 },
 	{ JPEG_INV, "", 0, 0 }
 };
 
@@ -63,7 +62,7 @@ static inline album_art_t *_album_art_alloc()
 	return res;
 }
 
-static const image_size_enum DEF_ALBUM_ART_BUILD_LEVEL = JPEG_SM;
+static const image_size_enum DEF_ALBUM_ART_BUILD_LEVEL = JPEG_LRG;
 
 image_size_enum album_art_get_profile(int width, int height)
 {
@@ -638,7 +637,7 @@ static int64_t _create_sized_from_image(const ffimg_t* img, int64_t album_art_id
 	{
 		if (!(img_resized = ffimg_resize(img, image_size_type->width, image_size_type->height, 1)))
 		{
-			DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) - fail to resize picture\n", (long long)album_art_id, (int)image_size);
+			DPRINTF(E_WARN, L_ARTWORK, "_create_sized_from_image(%lld,%d) - fail to resize picture\n", (long long)album_art_id, (int)image_size);
 			leave_as_is = 1;
 		}
 	}
