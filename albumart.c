@@ -52,6 +52,8 @@ static const image_size_type_t image_size_types[] = {
 	{ JPEG_INV, "", 0, 0 }
 };
 
+static const image_size_enum DEF_ALBUM_ART_BUILD_LEVEL = JPEG_LRG;
+
 static inline album_art_t *_album_art_alloc()
 {
 	album_art_t *res;
@@ -61,8 +63,6 @@ static inline album_art_t *_album_art_alloc()
 	}
 	return res;
 }
-
-static const image_size_enum DEF_ALBUM_ART_BUILD_LEVEL = JPEG_LRG;
 
 image_size_enum album_art_get_profile(int width, int height)
 {
@@ -86,7 +86,7 @@ image_size_enum album_art_get_profile(int width, int height)
 
 static const image_size_type_t *_get_image_size_type(image_size_enum size_type)
 {
-	if (size_type < JPEG_TN || size_type > JPEG_MED) size_type = JPEG_INV;
+	if (size_type < JPEG_TN || size_type > JPEG_LRG) size_type = JPEG_INV;
 	return &image_size_types[size_type];
 }
 
@@ -664,15 +664,13 @@ static int64_t _create_sized_from_image(const ffimg_t* img, int64_t album_art_id
 				album_art->timestamp = timestamp;
 				res = _insert_sized_album_art(album_art, image_size, album_art_id);
 				album_art_free(album_art);
-
-				DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) - successfully added new element [%lld]\n", (long long)album_art_id, (int)image_size, (long long)res);
-			}
-			else
-			{
-				DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) - fail to alocate album_art_t struct\n", (long long)album_art_id, (int)image_size);
 			}
 		}
 		ffimg_free(img_resized);
+		if (res)
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "_create_sized_from_image(%lld,%d) - added new element [%lld,%d]\n", (long long)album_art_id, (int)image_size, (long long)res, leave_as_is);
+		}
 		return res;
 	}
 
@@ -731,7 +729,10 @@ int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_
 	}
 	else
 	{ // insert new record
-		new_album_art = (res = _insert_album_art(album_art)) != 0;
+		if ((new_album_art = (res = _insert_album_art(album_art)) != 0))
+		{
+			DPRINTF(E_DEBUG, L_ARTWORK, "album_art_add(%s) - added new element [%lld]\n", path, (long long)res);
+		}
 	}
 
 	if (new_album_art)

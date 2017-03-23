@@ -433,8 +433,8 @@ done:
 
 ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 {
-	AVCodecContext *encoder_codec_ctx;
-	AVCodec *encoder_codec;
+	AVCodecContext *encoder_ctx;
+	AVCodec *encoder;
 	ffimg_t *dst_img = NULL;
 	int err, frame_filtered = 0, frame_encoded = 0;
 	AVFilterGraph *filter_graph = NULL;
@@ -447,19 +447,19 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 		return NULL;
 	}
 
-	if (!(encoder_codec = avcodec_find_encoder_by_name(to_jpeg ? "mjpeg" : "png")))
+	if (!(encoder = avcodec_find_encoder_by_name(to_jpeg ? "mjpeg" : "png")))
 	{
 		DPRINTF(E_ERROR, L_METADATA, "resize: Couldn't find a encoder\n");
 		return NULL;
 	}
 
-	if (!(filter_graph = _create_filter_graph(img->frame, width, height, encoder_codec, &src_ctx, &sink_ctx)))
+	if (!(filter_graph = _create_filter_graph(img->frame, width, height, encoder, &src_ctx, &sink_ctx)))
 	{
 		ffimg_free(dst_img);
 		return NULL;
 	}
 
-	if (!(err = av_buffersrc_add_frame(src_ctx, img->frame)))
+	if (!(err = av_buffersrc_write_frame(src_ctx, img->frame)))
 	{
 		if (!(err = av_buffersink_get_frame(sink_ctx, dst_img->frame)))
 		{
@@ -476,37 +476,32 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 		return NULL;
 	}
 
-	err = av_frame_copy_props(dst_img->frame, img->frame);
+	//err = av_frame_copy_props(dst_img->frame, img->frame);
 
-	if (!(encoder_codec_ctx = avcodec_alloc_context3(encoder_codec)))
+	if (!(encoder_ctx = avcodec_alloc_context3(encoder)))
 	{
 		DPRINTF(E_DEBUG, L_METADATA, "Failed to allocate the encoder codec context\n");
 		ffimg_free(dst_img);
 		return NULL;
 	}
 
-	encoder_codec_ctx->width = dst_img->frame->width;
-	encoder_codec_ctx->height = dst_img->frame->height;
-	encoder_codec_ctx->time_base.num = 1;
-	encoder_codec_ctx->time_base.den = 1;
-	encoder_codec_ctx->pix_fmt = dst_img->frame->format;
+	encoder_ctx->width = dst_img->frame->width;
+	encoder_ctx->height = dst_img->frame->height;
+	encoder_ctx->time_base.num = 1;
+	encoder_ctx->time_base.den = 1;
+	encoder_ctx->pix_fmt = dst_img->frame->format;
 	if (to_jpeg)
 	{
-		encoder_codec_ctx->qmin = 2;
-		encoder_codec_ctx->qmax = 2 + (int)album_art_get_profile(dst_img->frame->width, dst_img->frame->height);
-		encoder_codec_ctx->mb_lmin = encoder_codec_ctx->qmin * FF_QP2LAMBDA;
-		encoder_codec_ctx->mb_lmax = encoder_codec_ctx->qmax * FF_QP2LAMBDA;
-		encoder_codec_ctx->flags |= CODEC_FLAG_QSCALE;
-		//encoder_codec_ctx->global_quality = encoder_codec_ctx->qmin * FF_QP2LAMBDA;
-		//dst_img->frame->quality = encoder_codec_ctx->global_quality;
-		//dst_frame->quality = (int)1 + FF_LAMBDA_MAX * ( (100-quality)/100.0 ); 
-		//dst_frame->quality = (int)1 + 4096 * ((100 - quality) / 100.0);
+		encoder_ctx->qmin = 2;
+		encoder_ctx->qmax = 2 + (int)album_art_get_profile(dst_img->frame->width, dst_img->frame->height);
+		DPRINTF(E_DEBUG, L_METADATA, "resize: qmin=%d, qmax=%d\n", encoder_ctx->qmin, encoder_ctx->qmax);
+		encoder_ctx->flags |= CODEC_FLAG_QSCALE;
 		av_dict_set(&enc_options, "huffman", "optimal", 0);
 	}
 	else
 	{
-		encoder_codec_ctx->compression_level = 9;
-		encoder_codec_ctx->flags |= AV_CODEC_FLAG_INTERLACED_DCT; // progresive
+		encoder_ctx->compression_level = 9;
+		encoder_ctx->flags |= AV_CODEC_FLAG_INTERLACED_DCT; // progresive
 		av_dict_set(&enc_options, "pred", "none", 0);
 
 		if (width == -1 && height == -1)
@@ -534,27 +529,27 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 		}
 	}
 
-	if ((err = avcodec_open2(encoder_codec_ctx, encoder_codec, &enc_options)))
+	if ((err = avcodec_open2(encoder_ctx, encoder, &enc_options)))
 	{
 		DPRINTF(E_ERROR, L_METADATA, "resize: Failed to open the encoder\n");
 		av_dict_free(&enc_options);
-		avcodec_free_context(&encoder_codec_ctx);
+		avcodec_free_context(&encoder_ctx);
 		ffimg_free(dst_img);
 		return NULL;
 	}
 
-	if (!(err = avcodec_send_frame(encoder_codec_ctx, dst_img->frame)))
+	if (!(err = avcodec_send_frame(encoder_ctx, dst_img->frame)))
 	{
-		if (!(err = avcodec_receive_packet(encoder_codec_ctx, dst_img->packet)))
+		if (!(err = avcodec_receive_packet(encoder_ctx, dst_img->packet)))
 		{
-			dst_img->id = encoder_codec->id;
+			dst_img->id = encoder->id;
 			frame_encoded = 1;
 		}
 	}
 
 	av_dict_free(&enc_options);
-	avcodec_close(encoder_codec_ctx);
-	avcodec_free_context(&encoder_codec_ctx);
+	avcodec_close(encoder_ctx);
+	avcodec_free_context(&encoder_ctx);
 	if (frame_encoded)
 	{
 		return dst_img;
