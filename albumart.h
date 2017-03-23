@@ -51,7 +51,9 @@ typedef struct
 	time_t timestamp;
 } album_art_t;
 
+image_size_enum album_art_get_profile(int width, int height);
 const char* album_art_get_size_name(image_size_enum image_size);
+
 int64_t album_art_add(const char *path, const uint8_t *image_data, size_t image_data_size, int make_copy);
 int album_art_check(int64_t album_art_id);
 album_art_t *album_art_get(int64_t album_art_id, image_size_enum image_size);

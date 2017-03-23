@@ -65,6 +65,26 @@ static inline album_art_t *_album_art_alloc()
 
 static const image_size_enum DEF_ALBUM_ART_BUILD_LEVEL = JPEG_SM;
 
+image_size_enum album_art_get_profile(int width, int height)
+{
+	int i;
+	int64_t pixels;
+
+	inline int64_t number_of_pixels(int w, int h)
+	{
+		return (int64_t)w * h;
+	}
+
+	pixels = number_of_pixels(width, height);
+
+	for(i=0; image_size_types[i].width; ++i)
+	{
+		if (number_of_pixels(image_size_types[i].width, image_size_types[i].height) > pixels) break;
+	}
+
+	return image_size_types[i].type;
+}
+
 static const image_size_type_t *_get_image_size_type(image_size_enum size_type)
 {
 	if (size_type < JPEG_TN || size_type > JPEG_MED) size_type = JPEG_INV;

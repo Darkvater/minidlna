@@ -20,6 +20,7 @@
 #include "log.h"
 #include "libav.h"
 #include "ffimg.h"
+#include "albumart.h"
 
 
 /*
@@ -492,39 +493,42 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 	if (to_jpeg)
 	{
 		encoder_codec_ctx->qmin = 2;
-		encoder_codec_ctx->qmin = 4;
+		encoder_codec_ctx->qmax = 2 + (int)album_art_get_profile(dst_img->frame->width, dst_img->frame->height);
 		encoder_codec_ctx->mb_lmin = encoder_codec_ctx->qmin * FF_QP2LAMBDA;
 		encoder_codec_ctx->mb_lmax = encoder_codec_ctx->qmax * FF_QP2LAMBDA;
 		encoder_codec_ctx->flags |= CODEC_FLAG_QSCALE;
-		encoder_codec_ctx->global_quality = encoder_codec_ctx->qmin * FF_QP2LAMBDA;
-		dst_img->frame->quality = encoder_codec_ctx->global_quality;
+		//encoder_codec_ctx->global_quality = encoder_codec_ctx->qmin * FF_QP2LAMBDA;
+		//dst_img->frame->quality = encoder_codec_ctx->global_quality;
 		//dst_frame->quality = (int)1 + FF_LAMBDA_MAX * ( (100-quality)/100.0 ); 
 		//dst_frame->quality = (int)1 + 4096 * ((100 - quality) / 100.0);
 		av_dict_set(&enc_options, "huffman", "optimal", 0);
 	}
 	else
 	{
-		AVRational XResolution, YResolution;
-		int ResolutionUnit = -1;
-
 		encoder_codec_ctx->compression_level = 9;
 		encoder_codec_ctx->flags |= AV_CODEC_FLAG_INTERLACED_DCT; // progresive
 		av_dict_set(&enc_options, "pred", "none", 0);
 
-		if (_get_density(img->frame, &XResolution, &YResolution, &ResolutionUnit) && !av_cmp_q(XResolution,YResolution))
+		if (width == -1 && height == -1)
 		{
-			DPRINTF(E_DEBUG, L_METADATA, "resize: Resolution=%d:%d, Unit=%d\n", XResolution.num, XResolution.den, ResolutionUnit);
-			switch(ResolutionUnit)
-			{
-				case 2: // inch
-				av_dict_set_int(&enc_options, "dpi", (int)av_q2d(XResolution), 0);
-				break;
+			AVRational XResolution, YResolution;
+			int ResolutionUnit = -1;
 
-				case 3: // cm -> m
+			if (_get_density(img->frame, &XResolution, &YResolution, &ResolutionUnit) && !av_cmp_q(XResolution,YResolution))
+			{
+				DPRINTF(E_DEBUG, L_METADATA, "resize: Resolution=%d:%d, Unit=%d\n", XResolution.num, XResolution.den, ResolutionUnit);
+				switch(ResolutionUnit)
 				{
-					const AVRational h = { 100, 1 };
-					av_dict_set_int(&enc_options, "dpm", (int)av_q2d(av_mul_q(XResolution, h)), 0);
+					case 2: // inch
+					av_dict_set_int(&enc_options, "dpi", (int)av_q2d(XResolution), 0);
 					break;
+
+					case 3: // cm -> m
+					{
+						static const AVRational h = { 100, 1 };
+						av_dict_set_int(&enc_options, "dpm", (int)av_q2d(av_mul_q(XResolution, h)), 0);
+						break;
+					}
 				}
 			}
 		}
