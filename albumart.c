@@ -42,13 +42,16 @@ typedef struct
 	const char* name;
 	int width;
 	int height;
+	int64_t number_of_pixels;
 } image_size_type_t;
 
+#define _NOP(w,h) (((int64_t)w)*h)
+
 static const image_size_type_t image_size_types[] = {
-	{ JPEG_TN, "JPEG_TN", 160, 160 },
-	{ JPEG_SM, "JPEG_SM", 640, 480 },
-	{ JPEG_MED, "JPEG_MED", 1024, 768 },
-	{ JPEG_LRG, "JPEG_LRG", 4096, 4096 },
+	{ JPEG_TN, "JPEG_TN", 160, 160, _NOP(160,160) },
+	{ JPEG_SM, "JPEG_SM", 640, 480, _NOP(640,480) },
+	{ JPEG_MED, "JPEG_MED", 1024, 768, _NOP(1024,768) },
+	{ JPEG_LRG, "JPEG_LRG", 4096, 4096, _NOP(4096,4096) },
 	{ JPEG_INV, "", 0, 0 }
 };
 
@@ -99,7 +102,7 @@ image_size_enum album_art_get_profile(int width, int height)
 
 	for(i=0; image_size_types[i].width; ++i)
 	{
-		if (number_of_pixels(image_size_types[i].width, image_size_types[i].height) > pixels) break;
+		if (image_size_types[i].number_of_pixels >= pixels) break;
 	}
 
 	return image_size_types[i].type;
