@@ -28,14 +28,11 @@
 #include <sys/param.h>
 #include <fcntl.h>
 
-#include <libexif/exif-loader.h>
-#include <jpeglib.h>
-#include <setjmp.h>
 #include "libav.h"
 
 #include "upnpglobalvars.h"
 #include "tagutils/tagutils.h"
-#include "image_utils.h"
+#include "ffimg.h"
 #include "upnpreplyparse.h"
 #include "tivo_utils.h"
 #include "metadata.h"
@@ -56,7 +53,7 @@
 #define FLAG_DLNA_PN     0x00000080
 #define FLAG_MIME        0x00000100
 #define FLAG_DURATION    0x00000200
-#define FLAG_RESOLUTION  0x00000400
+#define XFLAG_RESOLUTION 0x00000400 // deprecated
 #define FLAG_DESCRIPTION 0x00000800
 #define FLAG_RATING      0x00001000
 #define FLAG_AUTHOR      0x00002000
@@ -438,12 +435,12 @@ static int
 add_entry_to_details(const char *path, off_t entry_size, time_t entry_timestamp, metadata_t *m, int64_t album_art_id)
 {
 	int ret = sql_exec(db, "INSERT into DETAILS"
-	                       " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, RESOLUTION,"
+	                       " (PATH, SIZE, TIMESTAMP, DURATION, DATE, CHANNELS, BITRATE, SAMPLERATE, WIDTH, HEIGHT,"
 	                       "  TITLE, CREATOR, PUBLISHER, AUTHOR, ARTIST, GENRE, COMMENT, DESCRIPTION, RATING,"
 	                       "  ALBUM, TRACK, DISC, DLNA_PN, MIME, ALBUM_ART, VIDEO_TYPE) "
 	                       "VALUES"
 	                       " (%Q, %lld, %lld, %Q, %Q, %u, %u, %u, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %Q, %u, %u, %Q, %Q, %lld, %d);",
-	                       path, (long long)entry_size, (long long)entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->resolution,
+	                       path, (long long)entry_size, (long long)entry_timestamp, m->duration, m->date, m->channels, m->bitrate, m->frequency, m->width, m->height,
 	                       m->title, m->creator, m->publisher, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
 	                       m->album, m->track, m->disc, m->dlna_pn, m->mime, (long long)album_art_id, (int)m->videotype);
 
@@ -463,10 +460,10 @@ int
 update_entry_in_details(const char *path, metadata_t *m, int64_t detailID)
 {
 	int ret = sql_exec(db, "UPDATE DETAILS set"
-		" DATE=%Q, CHANNELS=%u, BITRATE=%u, SAMPLERATE=%u, RESOLUTION=%Q,"
+		" DATE=%Q, CHANNELS=%u, BITRATE=%u, SAMPLERATE=%u, WIDTH=%u, HEIGHT=%u,"
 		" TITLE=%Q, CREATOR=%Q, PUBLISHER=%Q, AUTHOR=%Q, ARTIST=%Q, GENRE=%Q, COMMENT=%Q, DESCRIPTION=%Q, RATING=%Q,"
 		" ALBUM=%Q, TRACK=%u, DISC=%u, DLNA_PN=%Q, MIME=%Q, VIDEO_TYPE=%u where ID=%lld",
-		m->date, m->channels, m->bitrate, m->frequency, m->resolution,
+		m->date, m->channels, m->bitrate, m->frequency, m->width, m->height,
 		m->title, m->creator, m->publisher, m->author, m->artist, m->genre, m->comment, m->description, m->rating,
 		m->album, m->track, m->disc, m->dlna_pn, m->mime, m->videotype, detailID);
 
@@ -515,8 +512,6 @@ free_metadata(metadata_t *m, uint32_t flags)
 		free(m->mime);
 	if( flags & FLAG_DURATION )
 		free(m->duration);
-	if( flags & FLAG_RESOLUTION )
-		free(m->resolution);
 }
 
 int64_t
@@ -528,7 +523,7 @@ GetNfoMetadata(const char *path, int64_t detailID)
 	char **result;
 
 	char * sql = sqlite3_mprintf("SELECT d.TITLE, d.ARTIST, d.CREATOR, d.PUBLISHER, d.AUTHOR, d.ALBUM, d.GENRE, d.COMMENT, "
-		"d.DESCRIPTION, d.RATING, d.DISC, d.TRACK, d.CHANNELS, d.BITRATE, d.SAMPLERATE, d.ROTATION, d.RESOLUTION, "
+		"d.DESCRIPTION, d.RATING, d.DISC, d.TRACK, d.CHANNELS, d.BITRATE, d.SAMPLERATE, d.ORIENTATION, d.WIDTH, d.HEIGHT, "
 		"d.DURATION, d.DATE, d.MIME, d.DLNA_PN from DETAILS d WHERE d.ID=%lld", detailID);
 
 	if (sql_get_table(db, sql, &result, &nrows, NULL) == SQLITE_OK)
@@ -550,12 +545,13 @@ GetNfoMetadata(const char *path, int64_t detailID)
 			assign_integer_if_exists(&m.channels, result[33]);
 			assign_integer_if_exists(&m.bitrate, result[34]);
 			assign_integer_if_exists(&m.frequency, result[35]);
-			assign_integer_if_exists(&m.rotation, result[36]);
-			assign_value_if_exists(&m.resolution, result[37]);
-			assign_value_if_exists(&m.duration, result[38]);
-			assign_value_if_exists(&m.date, result[39]);
-			assign_value_if_exists(&m.mime, result[40]);
-			assign_value_if_exists(&m.dlna_pn, result[41]);
+			assign_integer_if_exists(&m.orientation, result[36]);
+			assign_integer_if_exists(&m.width, result[37]);
+			assign_integer_if_exists(&m.height, result[38]);
+			assign_value_if_exists(&m.duration, result[39]);
+			assign_value_if_exists(&m.date, result[40]);
+			assign_value_if_exists(&m.mime, result[41]);
+			assign_value_if_exists(&m.dlna_pn, result[42]);
 		}
 		sqlite3_free_table(result);
 	} else
@@ -588,17 +584,30 @@ GetFolderMetadata(const char *name, const char *path, const char *artist, const 
 	return ret;
 }
 
-static void _assign_metadata_field(char **field, char *value, uint32_t *free_flags, const uint32_t free_flag )
+static inline void _assign_metadata_field(char **field, char *value, uint32_t *free_flags, const uint32_t free_flag)
 {
 	if (value && *value)
 	{
 		char *esc_tag;
 
 		*field = trim(value);
-		if( (esc_tag = escape_tag(*field, 0)) )
+		if((esc_tag = escape_tag(*field, 0)))
 		{
 			*free_flags |= free_flag;
 			*field = esc_tag;
+		}
+	}
+}
+
+static inline void _assign_metadata_field_c(char **field, const char * const cvalue, uint32_t *free_flags, const uint32_t free_flag)
+{
+	if (cvalue && *cvalue)
+	{
+                char *dup;
+		if ((dup = strdup(cvalue)))
+		{
+			_assign_metadata_field(field, dup, free_flags, free_flag);
+			free(dup);
 		}
 	}
 }
@@ -709,171 +718,113 @@ GetAudioMetadata(const char *path, char *name)
 	return ret;
 }
 
-/* For libjpeg error handling */
-jmp_buf setjmp_buffer;
-static void
-libjpeg_error_handler(j_common_ptr cinfo)
-{
-	cinfo->err->output_message (cinfo);
-	longjmp(setjmp_buffer, 1);
-	return;
-}
-
 int64_t
 GetImageMetadata(const char *path, char *name)
 {
-	ExifData *ed;
-	ExifEntry *e = NULL;
-	ExifLoader *l;
-	struct jpeg_decompress_struct cinfo;
-	struct jpeg_error_mgr jerr;
-	FILE *infile;
-	int width=0, height=0, thumb=0;
-	char make[32], model[64] = {'\0'};
-	char b[1024];
+	int thumb=0;
 	struct stat file;
 	int64_t ret;
-	image_s *imsrc;
+	ffimg_t *img;
 	metadata_t m;
-	uint32_t free_flags = ALL_FLAGS;
+	const char* c;
+	uint32_t free_flags = 0;
 	memset(&m, '\0', sizeof(metadata_t));
 
-	//DEBUG DPRINTF(E_DEBUG, L_METADATA, "Parsing %s...\n", path);
-	if ( stat(path, &file) != 0 )
+	static const char * const MT_DATE_TIME[] = { "DateTimeOriginal", "DateTimeDigitized", "DateTime", NULL };
+
+	if (stat(path, &file))
+	{
 		return 0;
+	}
 	strip_ext(name);
-	//DEBUG DPRINTF(E_DEBUG, L_METADATA, " * size: %jd\n", file.st_size);
 
 	/* MIME hard-coded to JPEG for now, until we add PNG support */
-	m.mime = strdup("image/jpeg");
+	m.mime = "image/jpeg";
 
-	l = exif_loader_new();
-	exif_loader_write_file(l, path);
-	ed = exif_loader_get_data(l);
-	exif_loader_unref(l);
-	if( !ed )
-		goto no_exifdata;
-
-	e = exif_content_get_entry (ed->ifd[EXIF_IFD_EXIF], EXIF_TAG_DATE_TIME_ORIGINAL);
-	if( e || (e = exif_content_get_entry(ed->ifd[EXIF_IFD_EXIF], EXIF_TAG_DATE_TIME_DIGITIZED)) )
+	// TODO: load image with no orientation correction
+	if (!(img = ffimg_load_from_file(path)))
 	{
-		m.date = strdup(exif_entry_get_value(e, b, sizeof(b)));
-		if( strlen(m.date) > 10 )
-		{
-			m.date[4] = '-';
-			m.date[7] = '-';
-			m.date[10] = 'T';
-		}
-		else {
-			free(m.date);
-			m.date = NULL;
-		}
-	}
-	else {
-		/* One last effort to get the date from XMP */
-		image_get_jpeg_date_xmp(path, &m.date);
-	}
-	//DEBUG DPRINTF(E_DEBUG, L_METADATA, " * date: %s\n", m.date);
-
-	e = exif_content_get_entry(ed->ifd[EXIF_IFD_0], EXIF_TAG_MAKE);
-	if( e )
-	{
-		strncpyt(make, exif_entry_get_value(e, b, sizeof(b)), sizeof(make));
-		e = exif_content_get_entry(ed->ifd[EXIF_IFD_0], EXIF_TAG_MODEL);
-		if( e )
-		{
-			strncpyt(model, exif_entry_get_value(e, b, sizeof(b)), sizeof(model));
-			if( !strcasestr(model, make) )
-				snprintf(model, sizeof(model), "%s %s", make, exif_entry_get_value(e, b, sizeof(b)));
-			m.creator = escape_tag(trim(model), 1);
-		}
-	}
-	//DEBUG DPRINTF(E_DEBUG, L_METADATA, " * model: %s\n", model);
-
-	e = exif_content_get_entry(ed->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
-	if( e )
-	{
-		switch( exif_get_short(e->data, exif_data_get_byte_order(ed)) )
-		{
-		case 3:
-			m.rotation = 180;
-			break;
-		case 6:
-			m.rotation = 90;
-			break;
-		case 8:
-			m.rotation = 270;
-			break;
-		default:
-			m.rotation = 0;
-			break;
-		}
-	}
-
-	if( ed->size )
-	{
-		/* We might need to verify that the thumbnail is 160x160 or smaller */
-		if( ed->size > 12000 )
-		{
-			imsrc = image_new_from_jpeg(NULL, 0, ed->data, ed->size, 1, ROTATE_NONE);
-			if( imsrc )
-			{
- 				if( (imsrc->width <= 160) && (imsrc->height <= 160) )
-					thumb = 1;
-				image_free(imsrc);
-			}
-		}
-		else
-			thumb = 1;
-	}
-	//DEBUG DPRINTF(E_DEBUG, L_METADATA, " * thumbnail: %d\n", thumb);
-
-	exif_data_unref(ed);
-
-no_exifdata:
-	/* If SOF parsing fails, then fall through to reading the JPEG data with libjpeg to get the resolution */
-	if( image_get_jpeg_resolution(path, 1, NULL, 0, &width, &height) != 0 || !width || !height )
-	{
-		infile = fopen(path, "r");
-		if( infile )
-		{
-			cinfo.err = jpeg_std_error(&jerr);
-			jerr.error_exit = libjpeg_error_handler;
-			jpeg_create_decompress(&cinfo);
-			if( setjmp(setjmp_buffer) )
-				goto error;
-			jpeg_stdio_src(&cinfo, infile);
-			jpeg_read_header(&cinfo, TRUE);
-			jpeg_start_decompress(&cinfo);
-			width = cinfo.output_width;
-			height = cinfo.output_height;
-			error:
-			jpeg_destroy_decompress(&cinfo);
-			fclose(infile);
-		}
-	}
-	//DEBUG DPRINTF(E_DEBUG, L_METADATA, " * resolution: %dx%d\n", width, height);
-
-	if( !width || !height )
-	{
-		free_metadata(&m, free_flags);
 		return 0;
 	}
-	if( width <= 640 && height <= 480 )
-		m.dlna_pn = strdup("JPEG_SM");
-	else if( width <= 1024 && height <= 768 )
-		m.dlna_pn = strdup("JPEG_MED");
-	else if( (width <= 4096 && height <= 4096) || !GETFLAG(DLNA_STRICT_MASK) )
-		m.dlna_pn = strdup("JPEG_LRG");
-	xasprintf(&m.resolution, "%dx%d", width, height);
+
+	if (!(c = ffimg_get_metadata_field_ex(img, MT_DATE_TIME)))
+	{
+		m.date = strdup(c);
+		_assign_metadata_field_c(&m.date, c, &free_flags, FLAG_DATE);
+                if( strlen(m.date) > 10 )
+                {
+                        m.date[4] = '-';
+                        m.date[7] = '-';
+                        m.date[10] = 'T';
+                }
+                else {
+                        free(m.date);
+                        m.date = NULL;
+			free_flags &= ~FLAG_DATE;
+                }
+	}
+
+	{
+		const char *make_tag, *model_tag;
+
+		make_tag = ffimg_get_metadata_field(img, "Make");
+		model_tag = ffimg_get_metadata_field(img, "Model");
+
+		if (make_tag && !model_tag)
+		{
+			_assign_metadata_field_c(&m.creator, make_tag, &free_flags, FLAG_CREATOR);
+		}
+		else if (!make_tag && model_tag)
+		{
+			_assign_metadata_field_c(&m.creator, model_tag, &free_flags, FLAG_CREATOR);
+		}
+		else if (make_tag && model_tag && !strcasestr(make_tag, model_tag))
+		{
+			char *make_model;
+			if (xasprintf(&make_model, "%s %s", make_tag, model_tag)>0)
+			{
+				_assign_metadata_field(&m.creator, make_model, &free_flags, FLAG_CREATOR);
+				free(make_model);
+			}
+		}
+	}
+
+
+	if ((c = ffimg_get_metadata_field(img, "Orientation")))
+	{
+		m.orientation = atoi(c);
+	}
+
+	if (img->frame->width <= 160 && img->frame->height <=160)
+	{
+		thumb = 1;
+		_assign_metadata_field_c(&m.dlna_pn, "JPEG_TN", &free_flags, FLAG_DLNA_PN);
+	}
+	else if(img->frame->width <= 640 && img->frame->height <= 480)
+	{
+		_assign_metadata_field_c(&m.dlna_pn, "JPEG_SM", &free_flags, FLAG_DLNA_PN);
+	}
+	else if(img->frame->width <= 1024 && img->frame->height <= 768)
+	{
+		_assign_metadata_field_c(&m.dlna_pn, "JPEG_MED", &free_flags, FLAG_DLNA_PN);
+	}
+	else if((img->frame->width <= 4096 && img->frame->height <= 4096) || !GETFLAG(DLNA_STRICT_MASK) )
+	{
+		_assign_metadata_field_c(&m.dlna_pn, "JPEG_LRG", &free_flags, FLAG_DLNA_PN);
+	}
+
+	m.width = img->frame->width;
+	m.height = img->frame->height;
+
+	ffimg_free(img);
 
 	ret = sql_exec(db, "INSERT into DETAILS"
-	                   " (PATH, TITLE, SIZE, TIMESTAMP, DATE, RESOLUTION,"
-	                    " ROTATION, THUMBNAIL, CREATOR, DLNA_PN, MIME) "
+	                   " (PATH, TITLE, SIZE, TIMESTAMP, DATE, WIDTH, HEIGHT,"
+	                    " ORIENTATION, THUMBNAIL, CREATOR, DLNA_PN, MIME) "
 	                   "VALUES"
-	                   " (%Q, '%q', %lld, %lld, %Q, %Q, %u, %d, %Q, %Q, %Q);",
+	                   " (%Q, '%q', %lld, %lld, %Q, %u, %u, CASE WHEN %u>0 THEN %u END, %d, %Q, %Q, %Q);",
 	                   path, name, (long long)file.st_size, (long long)file.st_mtime, m.date,
-	                   m.resolution, m.rotation, thumb, m.creator, m.dlna_pn, m.mime);
+	                   m.width, m.height, m.orientation, m.orientation, thumb, m.creator, m.dlna_pn, m.mime);
 	if( ret != SQLITE_OK )
 	{
 		DPRINTF(E_ERROR, L_METADATA, "Error inserting details for '%s'!\n", path);
@@ -1039,7 +990,8 @@ GetVideoMetadata(const char *path, char *name, const char *parentID)
 		int duration, hours, min, sec, ms;
 		ts_timestamp_t ts_timestamp = NONE;
 		DPRINTF(E_DEBUG, L_METADATA, "Container: '%s' [%s]\n", ctx->iformat->name, basepath);
-		xasprintf(&m.resolution, "%dx%d", lav_width(vstream), lav_height(vstream));
+		m.width = lav_width(vstream);
+		m.height = lav_height(vstream);
 		if( ctx->bit_rate > 8 )
 			m.bitrate = ctx->bit_rate / 8;
 		if( ctx->duration > 0 ) {
@@ -1098,8 +1050,8 @@ GetVideoMetadata(const char *path, char *name, const char *parentID)
 				{
 					int raw_packet_size;
 					int dlna_ts_present = dlna_timestamp_is_present(path, &raw_packet_size);
-					DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s is %s MPEG2 TS packet size %d\n",
-						video_stream, basepath, m.resolution, raw_packet_size);
+					DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s is %ux%u MPEG2 TS packet size %d\n",
+						video_stream, basepath, m.width, m.height, raw_packet_size);
 					off += sprintf(m.dlna_pn+off, "TS_");
 					if( (lav_width(vstream)  >= 1280) &&
 					    (lav_height(vstream) >= 720) )
@@ -1146,8 +1098,8 @@ GetVideoMetadata(const char *path, char *name, const char *parentID)
 				}
 				else if( strcmp(ctx->iformat->name, "mpeg") == 0 )
 				{
-					DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s is %s MPEG2 PS\n",
-						video_stream, basepath, m.resolution);
+					DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s is %ux%u MPEG2 PS\n",
+						video_stream, basepath, m.width, m.height);
 					off += sprintf(m.dlna_pn+off, "PS_");
 					if( (lav_height(vstream) == 576) ||
 					    (lav_height(vstream) == 288) )
@@ -1158,8 +1110,8 @@ GetVideoMetadata(const char *path, char *name, const char *parentID)
 				}
 				else
 				{
-					DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s [%s] is %s non-DLNA MPEG2\n",
-						video_stream, basepath, ctx->iformat->name, m.resolution);
+					DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s [%s] is %ux%u non-DLNA MPEG2\n",
+						video_stream, basepath, ctx->iformat->name, m.width, m.height);
 					free(m.dlna_pn);
 					m.dlna_pn = NULL;
 				}
@@ -1647,8 +1599,8 @@ GetVideoMetadata(const char *path, char *name, const char *parentID)
 			case AV_CODEC_ID_MSMPEG4V3:
 				xasprintf(&m.mime, "video/x-msvideo");
 			default:
-				DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s is %s [type %d]\n",
-					video_stream, basepath, m.resolution, lav_codec_id(vstream));
+				DPRINTF(E_DEBUG, L_METADATA, "Stream %d of %s is %ux%u [type %d]\n",
+					video_stream, basepath, m.width, m.height, lav_codec_id(vstream));
 				break;
 		}
 	}

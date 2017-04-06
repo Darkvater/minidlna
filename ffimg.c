@@ -26,15 +26,9 @@
 /*
 	Based on http://jpegclub.org/exif_orientation.html
 */
-static const char *_get_filter_from_orientation(const AVFrame* frame, int *dimensions_swapped)
+static const char *_get_filter_from_orientation(int orientation, int *dimensions_swapped)
 {
-	AVDictionary *dict;
-	AVDictionaryEntry *oentry;
-	int orientation;
-
-	if (!(dict = av_frame_get_metadata(frame))) return NULL;
-	if (!(oentry = av_dict_get(dict, "Orientation", NULL, 0))) return NULL;
-	switch ((orientation = atoi(oentry->value)))
+	switch (orientation)
 	{
 	case 2:
 		*dimensions_swapped = 0;
@@ -67,6 +61,43 @@ static const char *_get_filter_from_orientation(const AVFrame* frame, int *dimen
 	default:
 		return NULL;
 	}
+}
+
+static inline int _get_frame_orientation(const AVFrame *frame)
+{
+        AVDictionary *dict;
+        AVDictionaryEntry *oentry;
+
+        if (!(dict = av_frame_get_metadata(frame))) return 0;
+        if (!(oentry = av_dict_get(dict, "Orientation", NULL, 0))) return 0;
+	return atoi(oentry->value);
+}
+
+const char * const ffimg_get_metadata_field(const ffimg_t *img, const char * const field)
+{
+        AVDictionary *dict;
+        AVDictionaryEntry *oentry;
+
+        if (!(dict = av_frame_get_metadata(img->frame))) return NULL;
+        if (!(oentry = av_dict_get(dict, field, NULL, 0))) return NULL;
+	return oentry->value;
+}
+
+const char * const ffimg_get_metadata_field_ex(const ffimg_t *img, const char * const fields[])
+{
+	int i;
+	AVDictionary *dict;
+        AVDictionaryEntry *oentry;
+
+        if (!(dict = av_frame_get_metadata(img->frame))) return NULL;
+
+	for(i=0; fields[i]; ++i)
+	{
+		if (!(oentry = av_dict_get(dict, fields[i], NULL, 0))) continue;
+		return oentry->value;
+	}
+
+	return NULL;
 }
 
 static inline int _parse_rational(const char *value, AVRational *r)
@@ -113,13 +144,19 @@ static int _get_density(const AVFrame *frame, AVRational *XResolution, AVRationa
 	return (res == 3);
 }
 
-static inline void _fill_ofilter(char *dst, size_t dst_size, size_t *len, const AVFrame *frame)
+static inline void _fill_ofilter(char *dst, size_t dst_size, size_t *len, const AVFrame *frame, int orientation)
 {
 	int dimensions_swapped;
 	const char *ofilter;
 
-	if (!(ofilter = _get_filter_from_orientation(frame, &dimensions_swapped))) return;
+	if (orientation<0) return;
 
+	if (!orientation)
+	{
+		if ((orientation = _get_frame_orientation(frame))<=0) return;
+	}
+
+	if (!(ofilter = _get_filter_from_orientation(orientation, &dimensions_swapped))) return;
 	*len += snprintf(dst + *len, dst_size - *len, "%s,", ofilter);
 }
 
@@ -135,6 +172,12 @@ static inline void _fill_scale_filter(char *dst, size_t dst_size, size_t *len, i
 	{
 		*len += snprintf(dst + *len, dst_size - *len, "scale=width=%d:height=%d:interl=-1,", width, height);
 	}
+}
+
+static inline void _fill_rotate_filter(char *dst, size_t dst_size, size_t *len, int angle)
+{
+	if (!angle) return;
+	 *len += snprintf(dst + *len, dst_size - *len, "rotate=PI*%d/180,", angle);
 }
 
 static inline void _fill_dst_pix_fmts(char *dst, size_t dst_size, size_t *len, const AVCodec *codec)
@@ -154,7 +197,7 @@ static inline void _fill_dst_pix_fmts(char *dst, size_t dst_size, size_t *len, c
 	}
 }
 
-static AVFilterGraph* _create_filter_graph(const AVFrame *frame, int width, int height, const AVCodec *dst_codec, AVFilterContext **src, AVFilterContext **sink)
+static AVFilterGraph* _create_filter_graph(const AVFrame *frame, int width, int height, int orientation, int angle, const AVCodec *dst_codec, AVFilterContext **src, AVFilterContext **sink)
 {
 	AVFilterGraph *filter_graph;
 	AVFilter *buffersrc, *buffersink;
@@ -204,7 +247,8 @@ static AVFilterGraph* _create_filter_graph(const AVFrame *frame, int width, int 
 		size_t len = 0;
 
 		args[0] = '\0';
-		_fill_ofilter(args, sizeof(args), &len, frame);
+		_fill_ofilter(args, sizeof(args), &len, frame, orientation);
+		_fill_rotate_filter(args, sizeof(args), &len, angle);
 		_fill_scale_filter(args, sizeof(args), &len, width, height);
 		_fill_dst_pix_fmts(args, sizeof(args), &len, dst_codec);
 	}
@@ -431,14 +475,14 @@ done:
 	return img;
 }
 
-static int _filter_frame(const AVFrame *src, int width, int height, const AVCodec *encoder, AVFrame *sink)
+static int _filter_frame(const AVFrame *src, int width, int height, int orientation, int angle, const AVCodec *encoder, AVFrame *sink)
 {
 	int filtered = 0, err;
 	AVFilterGraph *filter_graph = NULL;
         AVFilterContext *src_ctx = NULL;
         AVFilterContext *sink_ctx = NULL;
 
-	if (!(filter_graph = _create_filter_graph(src, width, height, encoder, &src_ctx, &sink_ctx)))
+	if (!(filter_graph = _create_filter_graph(src, width, height, orientation, angle, encoder, &src_ctx, &sink_ctx)))
         {
                 return 0;
         }
@@ -455,7 +499,7 @@ static int _filter_frame(const AVFrame *src, int width, int height, const AVCode
 
 }
 
-ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
+ffimg_t *ffimg_resize_ex(const ffimg_t *img, int width, int height, int orientation, int angle, int to_jpeg)
 {
 	AVCodec *encoder;
 	AVCodecContext *encoder_ctx;
@@ -474,7 +518,7 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 		return NULL;
 	}
 
-	if (!_filter_frame(img->frame, width, height, encoder, dst_img->frame))
+	if (!_filter_frame(img->frame, width, height, orientation, angle, encoder, dst_img->frame))
 	{
 		DPRINTF(E_ERROR, L_METADATA, "resize: Could not filter frame\n");
 		ffimg_free(dst_img);
@@ -565,6 +609,11 @@ ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
 	}
 }
 
+ffimg_t *ffimg_resize(const ffimg_t *img, int width, int height, int to_jpeg)
+{
+	return ffimg_resize_ex(img, width, height, 0, 0, to_jpeg);
+}
+
 ffimg_t *ffimg_clone(const ffimg_t *img)
 {
 	ffimg_t *res;
@@ -599,8 +648,10 @@ void ffimg_get_dimensions(const ffimg_t *img, int *width, int *height)
 {
 	int dimensions_swapped;
 	const char *ofilter;
+	int orientation = 0;
 
-	if (!(ofilter = _get_filter_from_orientation(img->frame, &dimensions_swapped)))
+	orientation = _get_frame_orientation(img->frame);
+	if (!(ofilter = _get_filter_from_orientation(orientation, &dimensions_swapped)))
 	{
 		dimensions_swapped = 0;
 	}

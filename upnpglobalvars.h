@@ -66,7 +66,7 @@
 #endif
 
 #define USE_FORK 1
-#define DB_VERSION 14
+#define DB_VERSION 15
 
 #ifdef ENABLE_NLS
 #define _(string) gettext(string)
