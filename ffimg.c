@@ -542,7 +542,7 @@ ffimg_t *ffimg_resize_ex(const ffimg_t *img, int width, int height, int orientat
 		encoder_ctx->qmin = 2;
 		encoder_ctx->qmax = 2 + (int)album_art_get_profile(dst_img->frame->width, dst_img->frame->height);
 		DPRINTF(E_DEBUG, L_METADATA, "resize: qmin=%d, qmax=%d\n", encoder_ctx->qmin, encoder_ctx->qmax);
-		encoder_ctx->flags |= CODEC_FLAG_QSCALE;
+		encoder_ctx->flags |= AV_CODEC_FLAG_QSCALE;
 		av_dict_set(&enc_options, "huffman", "optimal", 0);
 	}
 	else
