@@ -30,6 +30,14 @@
 
 #include "minidlnatypes.h"
 
+typedef struct
+{
+	const char* type;
+	const char* mime;
+} mime_info_t;
+
+typedef const mime_info_t *mime_info_ptr;
+
 /* String functions */
 /* We really want this one inlined, since it has a major performance impact */
 static inline int
@@ -72,7 +80,7 @@ static inline int is_dir(const struct dirent *d)
 	return -1;
 #endif
 }
-int xasprintf(char **strp, char *fmt, ...) __attribute__((__format__ (__printf__, 2, 3)));
+int xasprintf(char **strp, const char *fmt, ...) __attribute__((__format__ (__printf__, 2, 3)));
 void x_strlcat(char *dst, const char *src, size_t size);
 void x_strlcpy(char *dst, const char *src, size_t size);
 int ends_with(const char * haystack, const char * needle);
@@ -96,11 +104,14 @@ int is_album_art(const char * name);
 enum file_types resolve_unknown_type(const char * path, media_types dir_type);
 enum file_types	resolve_file_type(const struct dirent* dirent, const char *path, media_types dir_types);
 const char *mime_to_ext(const char * mime);
+int ext_to_mime(const char *path, mime_info_ptr *mime_info);
 
 /* Others */
-int make_dir(char * path, mode_t mode);
+int make_dir(const char *path, mode_t mode);
+int make_dir_ex(const char *full_path, mode_t mode);
 int copy_file(const char *src_file, const char *dst_file);
 int link_file(const char *src_file, const char *dst_file);
-unsigned int DJBHash(uint8_t *data, int len);
+unsigned int djb_hash(const uint8_t *data, int len);
+int djb_hash_from_file(const char *path, unsigned int *hash);
 
 #endif

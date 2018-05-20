@@ -237,6 +237,9 @@ GetProtocolInfo(struct upnphttp * h, const char * action)
 		"xmlns:u=\"%s\">"
 		"<Source>"
 		RESOURCE_PROTOCOL_INFO_VALUES
+#ifdef HAVE_WAVPACK
+		",http-get:*:audio/x-wavpack:*"
+#endif
 		"</Source>"
 		"<Sink></Sink>"
 		"</u:%sResponse>";
@@ -244,7 +247,7 @@ GetProtocolInfo(struct upnphttp * h, const char * action)
 	char * body;
 	int bodylen;
 
-	bodylen = asprintf(&body, resp,
+	bodylen = xasprintf(&body, resp,
 		action, "urn:schemas-upnp-org:service:ConnectionManager:1",
 		action);	
 	BuildSendAndCloseSoapResp(h, body, bodylen);
@@ -728,7 +731,7 @@ add_resized_res(int srcw, int srch, int reqw, int reqh, char *dlna_pn,
 
 inline static void
 add_res(char *size, char *duration, char *bitrate, char *sampleFrequency,
-        char *nrAudioChannels, char *resolution, char *dlna_pn, char *mime,
+        char *nrAudioChannels, const char * const width, const char * const height, char *dlna_pn, char *mime,
         char *detailID, const char *ext, struct Response *args)
 {
 	strcatf(args->str, "&lt;res ");
@@ -750,8 +753,8 @@ add_res(char *size, char *duration, char *bitrate, char *sampleFrequency,
 	if( nrAudioChannels && (args->filter & FILTER_RES_NRAUDIOCHANNELS) ) {
 		strcatf(args->str, "nrAudioChannels=\"%s\" ", nrAudioChannels);
 	}
-	if( resolution && (args->filter & FILTER_RES_RESOLUTION) ) {
-		strcatf(args->str, "resolution=\"%s\" ", resolution);
+	if( width && height && (args->filter & FILTER_RES_RESOLUTION) ) {
+		strcatf(args->str, "resolution=\"%sx%s\" ", width, height);
 	}
 	if( args->filter & FILTER_PV_SUBTITLE )
 	{
@@ -797,8 +800,8 @@ object_exists(const char *object)
 
 #define COLUMNS "o.DETAIL_ID, o.CLASS," \
                 " d.SIZE, d.TITLE, d.DURATION, d.BITRATE, d.SAMPLERATE, d.ARTIST," \
-                " d.ALBUM, d.GENRE, d.COMMENT, d.DESCRIPTION, d.CHANNELS, d.TRACK, d.DATE, d.RESOLUTION," \
-                " d.THUMBNAIL, d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.ROTATION, d.DISC, d.RATING, d.AUTHOR, d.PUBLISHER "
+                " d.ALBUM, d.GENRE, d.COMMENT, d.DESCRIPTION, d.CHANNELS, d.TRACK, d.DATE, d.WIDTH, d.HEIGHT, " \
+                " d.CREATOR, d.DLNA_PN, d.MIME, d.ALBUM_ART, d.DISC, d.RATING, d.AUTHOR, d.PUBLISHER "
 #define SELECT_COLUMNS "SELECT o.OBJECT_ID, o.PARENT_ID, o.REF_ID, " COLUMNS
 
 #define NON_ZERO(x) (x && atoi(x))
@@ -843,8 +846,8 @@ callback(void *args, int argc, char **argv, char **azColName)
 	char *id = argv[0], *parent = argv[1], *refID = argv[2], *detailID = argv[3], *class = argv[4], *size = argv[5], *title = argv[6],
 	     *duration = argv[7], *bitrate = argv[8], *sampleFrequency = argv[9], *artists = argv[10], *album = argv[11],
 	     *genres = argv[12], *comment = argv[13], *description = argv[14], * nrAudioChannels = argv[15], *track = argv[16], *date = argv[17],
-	     *resolution = argv[18], *tn = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22],
-	     *album_art = argv[23], *rotate = argv[24], *disc = argv[25], *rating = argv[26], *author = argv[27], *publisher = argv[28];
+	     *width = argv[18], *height = argv[19], *creator = argv[20], *dlna_pn = argv[21], *mime = argv[22],
+	     *album_art = argv[23], *disc = argv[24], *rating = argv[25], *author = argv[26], *publisher = argv[27];
 	char dlna_buf[128];
 	const char *ext;
 	struct string_s *str = passed_args->str;
@@ -940,7 +943,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 			/* LG hack: subtitles won't get used unless dc:title contains a dot. */
 			else if( passed_args->client == ELGDevice && (passed_args->flags & FLAG_HAS_CAPTIONS) )
 			{
-				ret = asprintf(&alt_title, "%s.", title);
+				ret = xasprintf(&alt_title, "%s.", title);
 				if( ret > 0 )
 					title = alt_title;
 				else
@@ -1045,27 +1048,18 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( passed_args->filter & FILTER_RES ) {
 			ext = mime_to_ext(mime);
 			add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-			        resolution, dlna_buf, mime, detailID, ext, passed_args);
+			        width, height, dlna_buf, mime, detailID, ext, passed_args);
 			if( *mime == 'i' ) {
 				int srcw, srch;
-				if( resolution && (sscanf(resolution, "%6dx%6d", &srcw, &srch) == 2) )
-				{
-					if( srcw > 4096 || srch > 4096 )
-						add_resized_res(srcw, srch, 4096, 4096, "JPEG_LRG", detailID, passed_args);
-					if( srcw > 1024 || srch > 768 )
-						add_resized_res(srcw, srch, 1024, 768, "JPEG_MED", detailID, passed_args);
-					if( srcw > 640 || srch > 480 )
-						add_resized_res(srcw, srch, 640, 480, "JPEG_SM", detailID, passed_args);
-				}
-				if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && NON_ZERO(tn) && IS_ZERO(rotate) ) {
-					ret = strcatf(str, "&lt;res protocolInfo=\"http-get:*:%s:%s\"&gt;"
-					                   "http://%s:%d/Thumbnails/%s.jpg"
-					                   "&lt;/res&gt;",
-					                   mime, "DLNA.ORG_PN=JPEG_TN;DLNA.ORG_CI=1", lan_addr[passed_args->iface].str,
-					                   runtime_vars.port, detailID);
-				}
-				else
-					add_resized_res(srcw, srch, 160, 160, "JPEG_TN", detailID, passed_args);
+				srcw = atoi(width);
+				srch = atoi(height);
+				if( srcw > 4096 || srch > 4096 )
+					add_resized_res(srcw, srch, 4096, 4096, "JPEG_LRG", detailID, passed_args);
+				if( srcw > 1024 || srch > 768 )
+					add_resized_res(srcw, srch, 1024, 768, "JPEG_MED", detailID, passed_args);
+				if( srcw > 640 || srch > 480 )
+					add_resized_res(srcw, srch, 640, 480, "JPEG_SM", detailID, passed_args);
+				add_resized_res(srcw, srch, 160, 160, "JPEG_TN", detailID, passed_args);
 			}
 			else if( *mime == 'v' ) {
 				switch( passed_args->client ) {
@@ -1078,7 +1072,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 					{
 						sprintf(dlna_buf, "DLNA.ORG_PN=%s;DLNA.ORG_OP=01;DLNA.ORG_CI=1", "MPEG_PS_NTSC");
 						add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-						        resolution, dlna_buf, mime, detailID, ext, passed_args);
+						        width, height, dlna_buf, mime, detailID, ext, passed_args);
 					}
 					break;
 				case ESonyBDP:
@@ -1090,13 +1084,13 @@ callback(void *args, int argc, char **argv, char **azColName)
 						{
 							sprintf(dlna_buf, "DLNA.ORG_PN=%s;DLNA.ORG_OP=01;DLNA.ORG_CI=1", "MPEG_TS_SD_NA");
 							add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-							        resolution, dlna_buf, mime, detailID, ext, passed_args);
+							        width, height, dlna_buf, mime, detailID, ext, passed_args);
 						}
 						if( strncmp(dlna_pn, "MPEG_TS_SD_EU", 13) != 0 )
 						{
 							sprintf(dlna_buf, "DLNA.ORG_PN=%s;DLNA.ORG_OP=01;DLNA.ORG_CI=1", "MPEG_TS_SD_EU");
 							add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-							        resolution, dlna_buf, mime, detailID, ext, passed_args);
+							        width, height, dlna_buf, mime, detailID, ext, passed_args);
 						}
 					}
 					else if( (dlna_pn &&
@@ -1111,13 +1105,13 @@ callback(void *args, int argc, char **argv, char **azColName)
 						{
 							sprintf(dlna_buf, "DLNA.ORG_PN=%s;DLNA.ORG_OP=01;DLNA.ORG_CI=1", "MPEG_PS_NTSC");
 							add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-						        	resolution, dlna_buf, mime, detailID, ext, passed_args);
+						        	width, height, dlna_buf, mime, detailID, ext, passed_args);
 						}
 						if( !dlna_pn || strncmp(dlna_pn, "MPEG_PS_PAL", 11) != 0 )
 						{
 							sprintf(dlna_buf, "DLNA.ORG_PN=%s;DLNA.ORG_OP=01;DLNA.ORG_CI=1", "MPEG_PS_PAL");
 							add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-						        	resolution, dlna_buf, mime, detailID, ext, passed_args);
+						        	width, height, dlna_buf, mime, detailID, ext, passed_args);
 						}
 					}
 					break;
@@ -1131,7 +1125,7 @@ callback(void *args, int argc, char **argv, char **azColName)
 					{
 					        sprintf(dlna_buf, "DLNA.ORG_PN=AVC_TS_HD_50_AC3%s", dlna_pn + 16);
 						add_res(size, duration, bitrate, sampleFrequency, nrAudioChannels,
-						        resolution, dlna_buf, mime, detailID, ext, passed_args);
+						        width, height, dlna_buf, mime, detailID, ext, passed_args);
 					}
 					break;
 				case ESamsungSeriesCDE:
@@ -1187,14 +1181,8 @@ callback(void *args, int argc, char **argv, char **azColName)
 			if( passed_args->client == EMediaRoom && !album )
 				ret = append(str, "[No Keywords]", "upnp:album");
 
-			/* EVA2000 doesn't seem to handle embedded thumbnails */
-			if( !(passed_args->flags & FLAG_RESIZE_THUMBS) && NON_ZERO(tn) && IS_ZERO(rotate) ) {
-				snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Thumbnails/%s.jpg", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
-				ret = append(str, dlna_buf, "upnp:albumArtURI");
-			} else {
-				snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Resized/%s.jpg?width=160,height=160", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
-				ret = append(str, dlna_buf, "upnp:albumArtURI");
-			}
+			snprintf(dlna_buf, sizeof(dlna_buf), "http://%s:%d/Resized/%s.jpg?width=160,height=160", lan_addr[passed_args->iface].str, runtime_vars.port, detailID);
+			ret = append(str, dlna_buf, "upnp:albumArtURI");
 		}
 		ret = strcatf(str, "&lt;/item&gt;");
 	}
@@ -1881,7 +1869,7 @@ SearchContentDirectory(struct upnphttp * h, const char * action)
 		if ( SortCriteria )
 			orderBy = parse_sort_criteria(SortCriteria, &ret);
 		else
-			asprintf(&orderBy, "order by d.TITLE COLLATE naturalsort");
+			ret = xasprintf(&orderBy, "order by d.TITLE COLLATE naturalsort");
 
 	/* If it's a DLNA client, return an error for bad sort criteria */
 	if( ret < 0 && ((args.flags & FLAG_DLNA) || GETFLAG(DLNA_STRICT_MASK)) )

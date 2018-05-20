@@ -14,7 +14,7 @@
 # License along with MiniDLNA; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA.
-AC_INIT(MiniDLNA,1.1.3,,minidlna)
+AC_INIT(MiniDLNA,1.1.6,,minidlna)
 #LT_INIT
 
 AC_CANONICAL_TARGET
@@ -37,6 +37,8 @@ AM_PROG_CC_C_O
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
+
+PKG_PROG_PKG_CONFIG
 
 # Default string definitions
 AC_DEFINE_UNQUOTED([OS_URL],"http://sourceforge.net/projects/minidlna/",[OS URL])
@@ -149,6 +151,15 @@ AC_COMPILE_IFELSE(
 AC_CHECK_HEADER(linux/netlink.h,
     [AC_DEFINE([HAVE_NETLINK],[1],[Support for Linux netlink])], [], [#include <sys/socket.h>])
 
+###############################################################################################################
+### Configure switches
+
+AC_ARG_ENABLE([wavpack],
+              [AS_HELP_STRING([--enable-wavpack], [Enable support for Wavpack files (default=auto)])])
+
+AC_ARG_ENABLE([libsystemd],
+	      [AS_HELP_STRING([--enable-libsystemd], [Enable systemd-friendly logging])])
+
 ################################################################################################################
 ### Library checks
 
@@ -199,6 +210,27 @@ for dir in "" /usr/local $INCLUDE_DIR; do
     if test -n "$dir"; then
         CPPFLAGS="$CPPFLAGS_SAVE -I$dir"
     fi
+    AC_CHECK_HEADERS([libavfilter/avfilter.h ffmpeg/libavfilter/avfilter.h libav/libavfilter/avfilter.h avfilter.h ffmpeg/avfilter.h libav/avfilter.h], [HAVE_LIBAVFILTER=1])
+    if test -z "$HAVE_LIBAVFILTER"; then
+        unset ac_cv_header_avfilter_h
+        unset ac_cv_header_libavfilter_avfilter_h
+        unset ac_cv_header_ffmpeg_avfilter_h
+        unset ac_cv_header_ffmpeg_libavfilter_avfilter_h
+        unset ac_cv_header_libav_avfilter_h
+        unset ac_cv_header_libav_libavfilter_avfilter_h
+        continue
+    fi
+    break
+done
+if test -z "$HAVE_LIBAVFILTER"; then
+    AC_MSG_ERROR([libavfilter headers not found or not usable])
+fi
+
+CPPFLAGS_SAVE="$CPPFLAGS"
+for dir in "" /usr/local $INCLUDE_DIR; do
+    if test -n "$dir"; then
+        CPPFLAGS="$CPPFLAGS_SAVE -I$dir"
+    fi
     AC_CHECK_HEADERS([libavformat/avformat.h ffmpeg/libavformat/avformat.h libav/libavformat/avformat.h avformat.h ffmpeg/avformat.h libav/avformat.h], [HAVE_LIBAVFORMAT=1])
     if test -z "$HAVE_LIBAVFORMAT"; then
         unset ac_cv_header_avformat_h
@@ -220,14 +252,11 @@ for dir in "" /usr/local $INCLUDE_DIR; do
     if test -n "$dir"; then
         CPPFLAGS="$CPPFLAGS -I$dir"
     fi
-    AC_CHECK_HEADERS([jpeglib.h sqlite3.h libexif/exif-loader.h id3tag.h ogg/ogg.h vorbis/codec.h FLAC/metadata.h],,[unset $as_ac_Header; break],)
+    AC_CHECK_HEADERS([jpeglib.h sqlite3.h id3tag.h ogg/ogg.h vorbis/codec.h FLAC/metadata.h],,[unset $as_ac_Header; break],)
     if test x"$ac_cv_header_jpeglib_h" != x"yes"; then
         CPPFLAGS="$CPPFLAGS_SAVE"
         continue
     elif test x"$ac_cv_header_sqlite3_h" != x"yes"; then
-        CPPFLAGS="$CPPFLAGS_SAVE"
-        continue
-    elif test x"$ac_cv_header_libexif_exif_loader_h" != x"yes"; then
         CPPFLAGS="$CPPFLAGS_SAVE"
         continue
     elif test x"$ac_cv_header_id3tag_h" != x"yes"; then
@@ -248,11 +277,36 @@ for dir in "" /usr/local $INCLUDE_DIR; do
 done
 test x"$ac_cv_header_jpeglib_h" != x"yes" && AC_MSG_ERROR([libjpeg headers not found or not usable])
 test x"$ac_cv_header_sqlite3_h" != x"yes" && AC_MSG_ERROR([libsqlite3 headers not found or not usable])
-test x"$ac_cv_header_libexif_exif_loader_h" != x"yes" && AC_MSG_ERROR([libexif headers not found or not usable])
 test x"$ac_cv_header_id3tag_h" != x"yes" && AC_MSG_ERROR([libid3tag headers not found or not usable])
 test x"$ac_cv_header_ogg_ogg_h" != x"yes" && AC_MSG_ERROR([libogg headers not found or not usable])
 test x"$ac_cv_header_vorbis_codec_h" != x"yes" && AC_MSG_ERROR([libvorbis headers not found or not usable])
 test x"$ac_cv_header_FLAC_metadata_h" != x"yes" && AC_MSG_ERROR([libFLAC headers not found or not usable])
+
+dnl ################################################
+dnl # WavPack library
+dnl ################################################
+
+AS_IF([test "x$enable_wavpack" != "xno"],
+	[PKG_CHECK_MODULES([WAVPACK], [wavpack >= 5.0.0], [have_wavpack=yes], [have_wavpack=no])],
+	[have_wavpack=no])
+
+AS_IF([test "x$have_wavpack" != "xno"],
+	[AC_DEFINE([HAVE_WAVPACK], [1], [Define for Wavpack support])],	
+	[AS_IF([test "x$enable_wavpack" = "xyes"],[AC_MSG_ERROR([Wavpack not found or not usable])])])
+
+dnl ##############################################
+dnl # libsystemd
+dnl ##############################################
+
+AS_IF([test "x$enable_libsystemd" != "xno"],
+        [PKG_CHECK_MODULES([SYSTEMD], [libsystemd], [have_libsystemd=yes], [have_libsystemd=no])],
+        [have_wavpack=no])
+
+AS_IF([test "x$have_libsystemd" != "xno"],
+        [AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define for systemd support])],
+        [AS_IF([test "x$enable_libsystemd" = "xyes"],[AC_MSG_ERROR([libsystemd not found or not usable])])])
+
+dnl ##############################################
 
 CFLAGS_SAVE="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
@@ -399,17 +453,6 @@ for dir in "" /usr/local $SEARCH_DIR; do
     if test -n "$dir"; then
         LDFLAGS="$LDFLAGS -L$dir/lib"
     fi
-    AC_CHECK_LIB([exif], [exif_data_new_from_file], [LIBEXIF_LIBS="-lexif"], [unset ac_cv_lib_exif_exif_data_new_from_file; LDFLAGS="$LDFLAGS_SAVE"; continue])
-    break
-done
-test x"$ac_cv_lib_jpeg_jpeg_set_defaults" = x"yes" || AC_MSG_ERROR([Could not find libexif])
-AC_SUBST(LIBEXIF_LIBS)
-
-LDFLAGS_SAVE="$LDFLAGS"
-for dir in "" /usr/local $SEARCH_DIR; do
-    if test -n "$dir"; then
-        LDFLAGS="$LDFLAGS -L$dir/lib"
-    fi
     AC_CHECK_LIB([id3tag], [id3_file_open], [LIBID3TAG_LIBS="-lid3tag"], [unset ac_cv_lib_id3tag_id3_file_open; LDFLAGS="$LDFLAGS_SAVE"; continue])
     break
 done
@@ -444,6 +487,39 @@ if test x"$ac_cv_lib_avformat_av_open_input_file" != x"yes" &&
    AC_MSG_ERROR([Could not find libavformat - part of ffmpeg])
 fi
 AC_SUBST(LIBAVFORMAT_LIBS)
+
+LDFLAGS_SAVE="$LDFLAGS"
+for dir in "" /usr/local $SEARCH_DIR; do
+    if test -n "$dir"; then
+        LDFLAGS="$LDFLAGS -L$dir/lib"
+    fi
+    AC_CHECK_LIB([avcodec], [avcodec_alloc_context3], [LIBAVCODEC_LIBS="-lavcodec"],
+                 [AC_CHECK_LIB([avcodec], [avcodec_open2], [LIBAVCODEC_LIBS="-lavcodec"],
+                  [unset ac_cv_lib_avcodec_avcodec_alloc_context3; unset ac_cv_lib_avcodec_avcodec_open2; LDFLAGS="$LDFLAGS_SAVE"; continue])])
+    break
+done
+if test x"$ac_cv_lib_avcodec_avcodec_alloc_context3" != x"yes" &&
+   test x"$ac_cv_lib_avcodec_avcodec_open2" != x"yes"; then
+   AC_MSG_ERROR([Could not find libavcodec - part of ffmpeg])
+fi
+AC_SUBST(LIBAVCODEC_LIBS)
+
+LDFLAGS_SAVE="$LDFLAGS"
+for dir in "" /usr/local $SEARCH_DIR; do
+    if test -n "$dir"; then
+        LDFLAGS="$LDFLAGS -L$dir/lib"
+    fi
+    AC_CHECK_LIB([avfilter], [avfilter_graph_alloc], [LIBAVFILTER_LIBS="-lavfilter"],
+                 [AC_CHECK_LIB([avfilter], [avfilter_graph_create_filter], [LIBAVFILTER_LIBS="-lavfilter"],
+                  [unset ac_cv_lib_avfilter_avfilter_graph_alloc; unset ac_cv_lib_avfilter_graph_create_filter; LDFLAGS="$LDFLAGS_SAVE"; continue])])
+    break
+done
+if test x"$ac_cv_lib_avfilter_avfilter_graph_alloc" != x"yes" &&
+   test x"$ac_cv_lib_avfilter_graph_create_filter" != x"yes"; then
+   AC_MSG_ERROR([Could not find libavfilter - part of ffmpeg])
+fi
+AC_SUBST(LIBAVFILTER_LIBS)
+
 
 AC_CHECK_LIB(avutil ,[av_rescale_q], [LIBAVUTIL_LIBS="-lavutil"], [AC_MSG_ERROR([Could not find libavutil - part of ffmpeg])])
 AC_SUBST(LIBAVUTIL_LIBS)

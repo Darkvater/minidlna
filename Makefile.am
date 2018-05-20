@@ -27,9 +27,9 @@ minidlnad_SOURCES = minidlna.c upnphttp.c upnpdescgen.c upnpsoap.c \
 			options.c minissdp.c uuid.c upnpevents.c \
 			sql.c utils.c metadata.c scanner.c inotify.c \
 			tivo_utils.c tivo_beacon.c tivo_commands.c \
-			playlist.c image_utils.c albumart.c log.c \
+			playlist.c albumart.c log.c \
 			naturalsort.c captions.c notify_event.c \
-			containers.c tagutils/tagutils.c
+			containers.c tagutils/tagutils.c ffimg.c
 man_MANS = minidlnad.8 minidlna.conf.5
 
 #if NEED_VORBIS
@@ -46,9 +46,12 @@ minidlnad_LDADD = \
 	@LIBSQLITE3_LIBS@ \
 	@LIBAVFORMAT_LIBS@ \
 	@LIBAVUTIL_LIBS@ \
-	@LIBEXIF_LIBS@ \
+	@LIBAVCODEC_LIBS@ \
+	@LIBAVFILTER_LIBS@ \
 	@LIBINTL@ \
 	@LIBICONV@ \
+	@WAVPACK_LIBS@ \
+	@SYSTEMD_LIBS@ \
 	-lFLAC  $(flacoggflag) $(vorbisflag)
 
 minidlnad_LDFLAGS = @STATIC_LDFLAGS@
@@ -60,7 +63,10 @@ testupnpdescgen_LDADD = \
 	@LIBSQLITE3_LIBS@ \
 	@LIBAVFORMAT_LIBS@ \
 	@LIBAVUTIL_LIBS@ \
-	@LIBEXIF_LIBS@ \
+	@LIBAVCODEC_LIBS@ \
+	@LIBAVFILTER_LIBS@ \
+	@WAVPACK_LIBS@ \
+	@SYSTEMD_LIBS@ \
 	-lFLAC  $(flacoggflag) $(vorbisflag)
 
 SUFFIXES = .tmpl .

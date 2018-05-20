@@ -40,6 +40,9 @@
 #ifdef HAVE_ICONV
 #include <iconv.h>
 #endif
+#ifdef HAVE_WAVPACK
+#include <wavpack/wavpack.h>
+#endif
 #include <sqlite3.h>
 #include "tagutils.h"
 #include "../metadata.h"
@@ -53,7 +56,7 @@ struct id3header {
 	unsigned char size[4];
 } __attribute((packed));
 
-char *winamp_genre[] = {
+static const char *winamp_genre[] = {
 	/*00*/ "Blues",             "Classic Rock",     "Country",           "Dance",
 	       "Disco",             "Funk",             "Grunge",            "Hip-Hop",
 	/*08*/ "Jazz",              "Metal",            "New Age",           "Oldies",
@@ -107,9 +110,12 @@ char *winamp_genre[] = {
 #include "tagutils-asf.h"
 #include "tagutils-wav.h"
 #include "tagutils-pcm.h"
+#ifdef HAVE_WAVPACK
+#include "tagutils-wv.h"
+#endif
 
-static int _get_tags(char *file, struct song_metadata *psong);
-static int _get_fileinfo(char *file, struct song_metadata *psong);
+static int _get_tags(const char *file, struct song_metadata *psong);
+static int _get_fileinfo(const char *file, struct song_metadata *psong);
 
 
 /*
@@ -117,9 +123,9 @@ static int _get_fileinfo(char *file, struct song_metadata *psong);
  */
 
 typedef struct {
-	char* type;
-	int (*get_tags)(char* file, struct song_metadata* psong);
-	int (*get_fileinfo)(char* file, struct song_metadata* psong);
+	const char* type;
+	int (*get_tags)(const char* file, struct song_metadata* psong);
+	int (*get_fileinfo)(const char* file, struct song_metadata* psong);
 } taghandler;
 
 static taghandler taghandlers[] = {
@@ -130,6 +136,9 @@ static taghandler taghandlers[] = {
 	{ "asf", 0,            _get_asffileinfo                                  },
 	{ "wav", _get_wavtags, _get_wavfileinfo                                  },
 	{ "pcm", 0,            _get_pcmfileinfo                                  },
+#ifdef HAVE_WAVPACK
+	{ "wv",  _get_wvtags,  _get_wvfileinfo					 },
+#endif
 	{ NULL,  0 }
 };
 
@@ -145,45 +154,49 @@ static taghandler taghandlers[] = {
 #include "tagutils-wav.c"
 #include "tagutils-pcm.c"
 #include "tagutils-plist.c"
+#ifdef HAVE_WAVPACK
+#include "tagutils-wv.c"
+#endif
 
 //*********************************************************************************
 // freetags()
-#define MAYBEFREE(a) { if((a)) free((a)); };
 void
 freetags(struct song_metadata *psong)
 {
 	int role;
 
-	MAYBEFREE(psong->path);
-	MAYBEFREE(psong->image);
-	MAYBEFREE(psong->title);
-	MAYBEFREE(psong->album);
-	MAYBEFREE(psong->genre);
-	MAYBEFREE(psong->comment);
+	free(psong->path);
+	free(psong->image);
+	free(psong->title);
+	free(psong->album);
+	free(psong->genre);
+	free(psong->comment);
+	free(psong->description);
 	for(role = ROLE_START; role <= ROLE_LAST; role++)
 	{
-		MAYBEFREE(psong->contributor[role]);
-		MAYBEFREE(psong->contributor_sort[role]);
+		free(psong->contributor[role]);
+		free(psong->contributor_sort[role]);
 	}
-	MAYBEFREE(psong->grouping);
-	MAYBEFREE(psong->mime);
-	MAYBEFREE(psong->dlna_pn);
-	MAYBEFREE(psong->tagversion);
-	MAYBEFREE(psong->musicbrainz_albumid);
-	MAYBEFREE(psong->musicbrainz_trackid);
-	MAYBEFREE(psong->musicbrainz_artistid);
-	MAYBEFREE(psong->musicbrainz_albumartistid);
+	free(psong->grouping);
+	free(psong->date);
+	free(psong->mime);
+	free(psong->dlna_pn);
+	free(psong->tagversion);
+	free(psong->musicbrainz_albumid);
+	free(psong->musicbrainz_trackid);
+	free(psong->musicbrainz_artistid);
+	free(psong->musicbrainz_albumartistid);
 }
 
 // _get_fileinfo
 static int
-_get_fileinfo(char *file, struct song_metadata *psong)
+_get_fileinfo(const char *file, struct song_metadata *psong)
 {
 	taghandler *hdl;
 
 	// dispatch to appropriate tag handler
 	for(hdl = taghandlers; hdl->type; ++hdl)
-		if(!strcmp(hdl->type, psong->type))
+		if(!strcasecmp(hdl->type, psong->type))
 			break;
 
 	if(hdl->get_fileinfo)
@@ -239,7 +252,7 @@ _make_composite_tags(struct song_metadata *psong)
 /*****************************************************************************/
 // _get_tags
 static int
-_get_tags(char *file, struct song_metadata *psong)
+_get_tags(const char *file, struct song_metadata *psong)
 {
 	taghandler *hdl;
 
@@ -259,7 +272,7 @@ _get_tags(char *file, struct song_metadata *psong)
 /*****************************************************************************/
 // readtags
 int
-readtags(char *path, struct song_metadata *psong, struct stat *stat, char *lang, char *type)
+readtags(const char *path, struct song_metadata *psong, struct stat *stat, const char *lang, const char *type)
 {
 	char *fname;
 

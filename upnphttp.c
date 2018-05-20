@@ -64,6 +64,7 @@
 #include <limits.h>
 
 #include "config.h"
+#include "libav.h"
 #include "upnpglobalvars.h"
 #include "upnphttp.h"
 #include "upnpdescgen.h"
@@ -74,10 +75,9 @@
 #include "albumart.h"
 #include "utils.h"
 #include "getifaddr.h"
-#include "image_utils.h"
+#include "ffimg.h"
 #include "log.h"
 #include "sql.h"
-#include <libexif/exif-loader.h>
 #include "tivo_utils.h"
 #include "tivo_commands.h"
 #include "clients.h"
@@ -99,7 +99,6 @@ static void SendResp_icon(struct upnphttp *, char * url);
 static void SendResp_albumArt(struct upnphttp *, char * url);
 static void SendResp_caption(struct upnphttp *, char * url);
 static void SendResp_resizedimg(struct upnphttp *, char * url);
-static void SendResp_thumbnail(struct upnphttp *, char * url);
 static void SendResp_dlnafile(struct upnphttp *, char * url);
 
 struct upnphttp * 
@@ -961,10 +960,6 @@ ProcessHttpQuery_upnphttp(struct upnphttp * h)
 		{
 			SendResp_dlnafile(h, HttpUrl+12);
 		}
-		else if(strncmp(HttpUrl, "/Thumbnails/", 12) == 0)
-		{
-			SendResp_thumbnail(h, HttpUrl+12);
-		}
 		else if(strncmp(HttpUrl, "/AlbumArt/", 10) == 0)
 		{
 			SendResp_albumArt(h, HttpUrl+10);
@@ -1434,14 +1429,17 @@ SendResp_icon(struct upnphttp * h, char * icon)
 	CloseSocket_upnphttp(h);
 }
 
+inline int size_type_check(long long size_type)
+{
+	return (size_type>=JPEG_TN) && (size_type<JPEG_INV);
+}
+
 static void
 SendResp_albumArt(struct upnphttp * h, char * url)
 {
 	char header[512];
-	char *path, *albumart_path;
-	char *tmode;
-	off_t size;
 	struct string_s str;
+	char *tmode;
 
 	if( h->reqflags & (FLAG_XFERSTREAMING|FLAG_RANGE) )
 	{
@@ -1450,11 +1448,28 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 		return;
 	}
 
-	long long id = strtoll(url, NULL, 10);
+	long long album_art_id = strtoll(url, NULL, 10);
 	const char *suffix = strchr(url, '-');
 
-	path = sql_get_text_field(db, "SELECT PATH from ALBUM_ART where ID  = '%lld'", id);
-	if( !path || !suffix)
+	image_size_enum size_type = JPEG_INV;
+
+	if (suffix)
+	{
+		long long parsed_size_type;
+
+		parsed_size_type = strtoll(suffix + 1, NULL, 10);
+		if (!size_type_check(parsed_size_type))
+		{
+			DPRINTF(E_WARN, L_HTTP, "wrong album art profile %lld, responding ERROR 404\n", parsed_size_type);
+			Send404(h);
+		}
+		else
+		{
+			size_type = (image_size_enum)parsed_size_type;
+		}
+	}
+
+	if (!album_art_check(album_art_id))
 	{
 		DPRINTF(E_WARN, L_HTTP, "ALBUM_ART ID %s not found, responding ERROR 404\n", url);
 		Send404(h);
@@ -1465,13 +1480,11 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 	pid_t newpid = -1;
 #endif /* USE_FORK */
 
-	long long size_type = strtoll(suffix + 1, NULL, 10);
-	const image_size_type_t *image_size_type = get_image_size_type((image_size_type_enum)size_type);
-	albumart_path = get_path_from_image_size_type(path, image_size_type);
 
-	int fd = _open_file(path);
-	if (fd < 0) {
-		DPRINTF(E_DEBUG, L_HTTP, "Album art doesn't exist in cache, adding new entry %s\n", albumart_path);
+	album_art_t *album_art = album_art_get(album_art_id, size_type);
+
+	if (!album_art) {
+
 #if USE_FORK
 		newpid = process_fork(h->req_client);
 		if (newpid > 0)
@@ -1480,53 +1493,94 @@ SendResp_albumArt(struct upnphttp * h, char * url)
 			goto albumart_error;
 		}
 #endif
-		int ret = save_resized_album_art_from_file_to_file(path, albumart_path, image_size_type);
-		if (ret != 0)
+		if (size_type != JPEG_INV)
 		{
-			DPRINTF(E_WARN, L_HTTP, "ALBUM_ART ID %s-%s not found, responding ERROR 404\n", url, image_size_type->name);
+			int64_t resized_album_art_id;
+
+			DPRINTF(E_INFO, L_HTTP, "Album art doesn't exist in cache, adding new entry %lld-%d\n", album_art_id, (int)size_type);
+
+			if ((resized_album_art_id = album_art_create_sized(album_art_id, size_type)))
+			{
+				DPRINTF(E_DEBUG, L_HTTP, "Sized album art %lld-%d created, ID=%lld\n", album_art_id, (int)size_type, (long long)resized_album_art_id);
+				album_art = album_art_get(album_art_id, size_type);
+			}
+			else
+			{
+				DPRINTF(E_WARN, L_HTTP, "Unable to create sized album art %lld-%d\n", album_art_id, (int)size_type);
+			}
+		}
+
+		if (!album_art)
+		{
+			DPRINTF(E_WARN, L_HTTP, "ALBUM_ART ID %s-%d not found, responding ERROR 404\n", url, (int)size_type);
 			Send404(h);
 			goto albumart_error;
 		}
-
-		fd = _open_file(albumart_path);
 	}
 
-	DPRINTF(E_INFO, L_HTTP, "Serving album art ID: %lld [%s]\n", id, albumart_path);
-
-	if( fd < 0 ) {
-		DPRINTF(E_ERROR, L_HTTP, "Error opening %s\n", albumart_path);
-		if (fd == -403)
-			Send403(h);
-		else
-			Send404(h);
-		goto albumart_error;
-	}
-	size = lseek(fd, 0, SEEK_END);
-	lseek(fd, 0, SEEK_SET);
-
-	INIT_STR(str, header);
+	if (album_art->is_blob)
+	{
+		DPRINTF(E_INFO, L_HTTP, "Serving album art %lld-%d from blob\n", album_art_id, (int)size_type);
+		INIT_STR(str, header);
 
 #if USE_FORK
-	if (newpid == 0 && (h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0))
-		tmode = "Background";
-	else
+		if (newpid == 0 && (h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0))
+			tmode = "Background";
+		else
 #endif
-	tmode = "Interactive";
-	start_dlna_header(&str, 200, tmode, "image/jpeg");
-	strcatf(&str, "Content-Length: %jd\r\n"
-	              "contentFeatures.dlna.org: DLNA.ORG_PN=%s\r\n\r\n",
-	              (intmax_t)size, image_size_type->name);
+		tmode = "Interactive";
+		start_dlna_header(&str, 200, tmode, "image/jpeg");
+		strcatf(&str, "Content-Length: %jd\r\n"
+					  "contentFeatures.dlna.org: DLNA.ORG_PN=%s\r\n\r\n",
+					  (intmax_t)album_art->image.blob.size, album_art_get_size_name(size_type));
 
-	if( send_data(h, str.data, str.off, MSG_MORE) == 0 )
-	{
-		if( h->req_command != EHead )
-			send_file(h, fd, 0, size-1);
+		if( send_data(h, str.data, str.off, MSG_MORE) == 0 )
+		{
+			if( h->req_command != EHead )
+				send_data(h, (char*)album_art->image.blob.data, album_art->image.blob.size, 0);
+		}
 	}
-	close(fd);
+	else
+	{
+		off_t size;
+
+		DPRINTF(E_INFO, L_HTTP, "Serving album art %lld-%d from file %s\n", album_art_id, (int)size_type, album_art->image.path);
+
+		int fd = _open_file(album_art->image.path);
+		if( fd < 0 ) {
+			DPRINTF(E_ERROR, L_HTTP, "Error opening %s\n", album_art->image.path);
+			if (fd == -403)
+				Send403(h);
+			else
+				Send404(h);
+			goto albumart_error;
+		}
+		size = lseek(fd, 0, SEEK_END);
+		lseek(fd, 0, SEEK_SET);
+
+		INIT_STR(str, header);
+
+#if USE_FORK
+		if (newpid == 0 && (h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0))
+			tmode = "Background";
+		else
+#endif
+		tmode = "Interactive";
+		start_dlna_header(&str, 200, tmode, "image/jpeg");
+		strcatf(&str, "Content-Length: %jd\r\n"
+					  "contentFeatures.dlna.org: DLNA.ORG_PN=%s\r\n\r\n",
+					  (intmax_t)size, album_art_get_size_name((image_size_enum)size_type));
+
+		if( send_data(h, str.data, str.off, MSG_MORE) == 0 )
+		{
+			if( h->req_command != EHead )
+				send_file(h, fd, 0, size-1);
+		}
+		close(fd);
+	}
 
 albumart_error:
-	sqlite3_free(path);
-	free(albumart_path);
+	album_art_free(album_art);
 #if USE_FORK
 	if (newpid == 0)
 		_exit(0);
@@ -1580,71 +1634,6 @@ SendResp_caption(struct upnphttp * h, char * object)
 }
 
 static void
-SendResp_thumbnail(struct upnphttp * h, char * object)
-{
-	char header[512];
-	char *path;
-	long long id;
-	ExifData *ed;
-	ExifLoader *l;
-	struct string_s str;
-
-	if( h->reqflags & (FLAG_XFERSTREAMING|FLAG_RANGE) )
-	{
-		DPRINTF(E_WARN, L_HTTP, "Client tried to specify transferMode as Streaming with an image!\n");
-		Send406(h);
-		return;
-	}
-
-	id = strtoll(object, NULL, 10);
-	path = sql_get_text_field(db, "SELECT PATH from DETAILS where ID = '%lld'", id);
-	if( !path )
-	{
-		DPRINTF(E_WARN, L_HTTP, "DETAIL ID %s not found, responding ERROR 404\n", object);
-		Send404(h);
-		return;
-	}
-	DPRINTF(E_INFO, L_HTTP, "Serving thumbnail for ObjectId: %lld [%s]\n", id, path);
-
-	if( access(path, F_OK) != 0 )
-	{
-		DPRINTF(E_ERROR, L_HTTP, "Error accessing %s\n", path);
-		Send404(h);
-		sqlite3_free(path);
-		return;
-	}
-
-	l = exif_loader_new();
-	exif_loader_write_file(l, path);
-	ed = exif_loader_get_data(l);
-	exif_loader_unref(l);
-	sqlite3_free(path);
-
-	if( !ed || !ed->size )
-	{
-		Send404(h);
-		if( ed )
-			exif_data_unref(ed);
-		return;
-	}
-
-	INIT_STR(str, header);
-
-	start_dlna_header(&str, 200, "Interactive", "image/jpeg");
-	strcatf(&str, "Content-Length: %jd\r\n"
-	              "contentFeatures.dlna.org: DLNA.ORG_PN=JPEG_TN;DLNA.ORG_CI=1\r\n\r\n",
-	              (intmax_t)ed->size);
-
-	if( send_data(h, str.data, str.off, MSG_MORE) == 0 )
-	{
-		if( h->req_command != EHead )
-			send_data(h, (char *)ed->data, ed->size, 0);
-	}
-	exif_data_unref(ed);
-	CloseSocket_upnphttp(h);
-}
-
-static void
 SendResp_resizedimg(struct upnphttp * h, char * object)
 {
 	char header[512];
@@ -1653,23 +1642,18 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 	char **result;
 	char dlna_pn[22];
 	uint32_t dlna_flags = DLNA_FLAG_DLNA_V1_5|DLNA_FLAG_HTTP_STALLING|DLNA_FLAG_TM_B|DLNA_FLAG_TM_I;
-	int width=640, height=480, dstw, dsth, size;
-	int srcw, srch;
-	unsigned char * data = NULL;
+	int width=640, height=480, rotate=0;
 	char *path, *file_path = NULL;
-	char *resolution = NULL;
 	char *key, *val;
 	char *saveptr, *item = NULL;
-	int rotate;
-	int pixw = 0, pixh = 0;
+	int orientation = 0;
 	long long id;
 	int rows=0, chunked, ret;
-	image_s *imsrc = NULL, *imdst = NULL;
-	int scale = 1;
+	ffimg_t *imgsrc = NULL, *imgdst = NULL;
 	const char *tmode;
 
 	id = strtoll(object, &saveptr, 10);
-	snprintf(buf, sizeof(buf), "SELECT PATH, RESOLUTION, ROTATION from DETAILS where ID = '%lld'", (long long)id);
+	snprintf(buf, sizeof(buf), "SELECT PATH, ORIENTATION from DETAILS where ID = '%lld'", (long long)id);
 	ret = sql_get_table(db, buf, &result, &rows, NULL);
 	if( ret != SQLITE_OK )
 	{
@@ -1679,10 +1663,9 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 	if( rows )
 	{
 		file_path = result[3];
-		resolution = result[4];
-		rotate = result[5] ? atoi(result[5]) : 0;
+		orientation = result[6] ? atoi(result[6]) : 0;
 	}
-	if( !file_path || !resolution || (access(file_path, F_OK) != 0) )
+	if( !file_path || (access(file_path, F_OK) != 0) )
 	{
 		DPRINTF(E_WARN, L_HTTP, "%s not found, responding ERROR 404\n", object);
 		sqlite3_free_table(result);
@@ -1711,14 +1694,11 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 		}
 		else if( strcasecmp(key, "rotation") == 0 )
 		{
-			rotate = (rotate + atoi(val)) % 360;
-			sql_exec(db, "UPDATE DETAILS set ROTATION = %d where ID = %lld", rotate, id);
+			rotate = atoi(val) % 360;
 		}
-		else if( strcasecmp(key, "pixelshape") == 0 )
+		else if ( strcasecmp(key, "orientation") == 0 )
 		{
-			ret = sscanf(val, "%d:%d", &pixw, &pixh);
-			if( ret != 2 )
-				pixw = pixh = 0;
+			orientation = atoi(val);
 		}
 	}
 
@@ -1739,73 +1719,39 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 	}
 
 	DPRINTF(E_INFO, L_HTTP, "Serving resized image for ObjectId: %lld [%s]\n", id, file_path);
-	if( rotate )
-		DPRINTF(E_DEBUG, L_HTTP, "Rotating image %d degrees\n", rotate);
-	switch( rotate )
+
+#if USE_FORK
+        if( (h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0) )
+                tmode = "Background";
+        else
+#endif
+                tmode = "Interactive";
+
+	if(!(imgsrc = ffimg_load_from_file(file_path)))
 	{
-		case 90:
-			ret = sscanf(resolution, "%dx%d", &srch, &srcw);
-			rotate = ROTATE_90;
-			break;
-		case 270:
-			ret = sscanf(resolution, "%dx%d", &srch, &srcw);
-			rotate = ROTATE_270;
-			break;
-		case 180:
-			ret = sscanf(resolution, "%dx%d", &srcw, &srch);
-			rotate = ROTATE_180;
-			break;
-		default:
-			ret = sscanf(resolution, "%dx%d", &srcw, &srch);
-			rotate = ROTATE_NONE;
-			break;
-	}
-	if( ret != 2 )
-	{
+		DPRINTF(E_WARN, L_HTTP, "Unable to open image file %s\n", file_path);
 		Send500(h);
-		return;
-	}
-	/* Figure out the best destination resolution we can use */
-	dstw = width;
-	dsth = ((((width<<10)/srcw)*srch)>>10);
-	if( dsth > height )
-	{
-		dsth = height;
-		dstw = (((height<<10)/srch) * srcw>>10);
-	}
-	/* Account for pixel shape */
-	if( pixw && pixh )
-	{
-		if( pixh > pixw )
-			dsth = dsth * pixw / pixh;
-		else if( pixw > pixh )
-			dstw = dstw * pixh / pixw;
+		goto resized_error;
 	}
 
-	if( dstw <= 160 && dsth <= 160 )
+	if (!(imgdst = ffimg_resize_ex(imgsrc, width, height, orientation, rotate, 1)))
+	{
+		DPRINTF(E_WARN, L_HTTP, "Unable to resize/change orientation of image %s\n", file_path);
+		Send500(h);
+		goto resized_error;
+	}
+
+	if( imgdst->frame->width <= 160 && imgdst->frame->height <= 160 )
 		strcpy(dlna_pn, "DLNA.ORG_PN=JPEG_TN;");
-	else if( dstw <= 640 && dsth <= 480 )
+	else if( imgdst->frame->width <= 640 && imgdst->frame->height <= 480 )
 		strcpy(dlna_pn, "DLNA.ORG_PN=JPEG_SM;");
-	else if( dstw <= 1024 && dsth <= 768 )
+	else if( imgdst->frame->width <= 1024 && imgdst->frame->height <= 756 )
 		strcpy(dlna_pn, "DLNA.ORG_PN=JPEG_MED;");
 	else
 		strcpy(dlna_pn, "DLNA.ORG_PN=JPEG_LRG;");
 
-	if( srcw>>4 >= dstw && srch>>4 >= dsth)
-		scale = 8;
-	else if( srcw>>3 >= dstw && srch>>3 >= dsth )
-		scale = 4;
-	else if( srcw>>2 >= dstw && srch>>2 >= dsth )
-		scale = 2;
-
 	INIT_STR(str, header);
 
-#if USE_FORK
-	if( (h->reqflags & FLAG_XFERBACKGROUND) && (setpriority(PRIO_PROCESS, 0, 19) == 0) )
-		tmode = "Background";
-	else
-#endif
-		tmode = "Interactive";
 	start_dlna_header(&str, 200, tmode, "image/jpeg");
 	strcatf(&str, "contentFeatures.dlna.org: %sDLNA.ORG_CI=1;DLNA.ORG_FLAGS=%08X%024X\r\n",
 	              dlna_pn, dlna_flags, 0);
@@ -1813,7 +1759,7 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 	if( strcmp(h->HttpVer, "HTTP/1.0") == 0 )
 	{
 		chunked = 0;
-		imsrc = image_new_from_jpeg(file_path, 1, NULL, 0, scale, rotate);
+		strcatf(&str, "Content-Length: %d\r\n\r\n", (int)imgdst->packet->size);
 	}
 	else
 	{
@@ -1821,52 +1767,25 @@ SendResp_resizedimg(struct upnphttp * h, char * object)
 		strcatf(&str, "Transfer-Encoding: chunked\r\n\r\n");
 	}
 
-	if( !chunked )
-	{
-		if( !imsrc )
-		{
-			DPRINTF(E_WARN, L_HTTP, "Unable to open image %s!\n", file_path);
-			Send500(h);
-			goto resized_error;
-		}
-
-		imdst = image_resize(imsrc, dstw, dsth);
-		data = image_save_to_jpeg_buf(imdst, &size);
-
-		strcatf(&str, "Content-Length: %d\r\n\r\n", size);
-	}
-
 	if( (send_data(h, str.data, str.off, 0) == 0) && (h->req_command != EHead) )
 	{
 		if( chunked )
 		{
-			imsrc = image_new_from_jpeg(file_path, 1, NULL, 0, scale, rotate);
-			if( !imsrc )
-			{
-				DPRINTF(E_WARN, L_HTTP, "Unable to open image %s!\n", file_path);
-				Send500(h);
-				goto resized_error;
-			}
-			imdst = image_resize(imsrc, dstw, dsth);
-			data = image_save_to_jpeg_buf(imdst, &size);
-
-			ret = sprintf(buf, "%x\r\n", size);
+			ret = sprintf(buf, "%x\r\n", imgdst->packet->size);
 			send_data(h, buf, ret, MSG_MORE);
-			send_data(h, (char *)data, size, MSG_MORE);
+			send_data(h, (char *)imgdst->packet->data, imgdst->packet->size, MSG_MORE);
 			send_data(h, "\r\n0\r\n\r\n", 7, 0);
 		}
 		else
 		{
-			send_data(h, (char *)data, size, 0);
+			send_data(h, (char *)imgdst->packet->data, imgdst->packet->size, 0);
 		}
 	}
 	DPRINTF(E_INFO, L_HTTP, "Done serving %s\n", file_path);
-	if( imsrc )
-		image_free(imsrc);
-	if( imdst && imsrc != imdst)
-		image_free(imdst);
-	CloseSocket_upnphttp(h);
 resized_error:
+	ffimg_free(imgsrc);
+	ffimg_free(imgdst);
+	CloseSocket_upnphttp(h);
 	sqlite3_free_table(result);
 #if USE_FORK
 	if( newpid == 0 )

@@ -418,7 +418,7 @@ _ogg_get_next_page(FILE *f, ogg_sync_state *sync, ogg_page *page,
 
 
 static int
-_get_oggfileinfo(char *filename, struct song_metadata *psong)
+_get_oggfileinfo(const char *filename, struct song_metadata *psong)
 {
 	FILE *file = fopen(filename, "rb");
 	ogg_sync_state sync;

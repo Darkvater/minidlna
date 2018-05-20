@@ -22,7 +22,7 @@
  */
 
 static int
-_get_pcmfileinfo(char *filename, struct song_metadata *psong)
+_get_pcmfileinfo(const char *filename, struct song_metadata *psong)
 {
 	struct stat file;
 	uint32_t sec, ms;

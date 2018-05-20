@@ -36,8 +36,10 @@
 #include "utils.h"
 #include "log.h"
 
+static const size_t _BUF_SIZE = 1024 * 4;
+
 int
-xasprintf(char **strp, char *fmt, ...)
+xasprintf(char **strp, const char *fmt, ...)
 {
 	va_list args;
 	int ret;
@@ -270,10 +272,9 @@ strip_char(char *name, char c)
 }
 
 /* Code basically stolen from busybox */
-int
-make_dir(char * path, mode_t mode)
-{
-	char * s = path;
+int make_dir(const char *path, mode_t mode) {
+	char *path_copy = strdup(path);
+	char * s = path_copy;
 	char c;
 	struct stat st;
 
@@ -291,26 +292,28 @@ make_dir(char * path, mode_t mode)
 				do {
 					++s;
 				} while (*s == '/');
-				c = *s;     /* Save the current char */
-				*s = '\0';     /* and replace it with nul. */
+				c = *s; /* Save the current char */
+				*s = '\0'; /* and replace it with nul. */
 				break;
 			}
 			++s;
 		}
 
-		if (mkdir(path, mode) < 0) {
+		if (mkdir(path_copy, mode) < 0) {
 			/* If we failed for any other reason than the directory
 			 * already exists, output a diagnostic and return -1.*/
 			if ((errno != EEXIST && errno != EISDIR)
-			    || (stat(path, &st) < 0 || !S_ISDIR(st.st_mode))) {
-				DPRINTF(E_WARN, L_GENERAL, "make_dir: cannot create directory '%s'\n", path);
-				if (c)
-					*s = c;
+					|| (stat(path_copy, &st) < 0 || !S_ISDIR(st.st_mode))) {
+				DPRINTF(E_WARN, L_GENERAL, "make_dir: cannot create directory '%s'\n", path_copy);
+				free(path_copy);
 				return -1;
 			}
 		}
-	        if (!c)
+
+		if (!c) {
+			free(path_copy);
 			return 0;
+		}
 
 		/* Remove any inserted nul from the path. */
 		*s = c;
@@ -318,21 +321,34 @@ make_dir(char * path, mode_t mode)
 	} while (1);
 }
 
+int make_dir_ex(const char *full_path, mode_t mode) {
+	char *full_path_copy = strdup(full_path);
+	int res = make_dir(dirname(full_path_copy), mode);
+	free(full_path_copy);
+	return res;
+}
+
+
 int
 copy_file(const char *src_file, const char *dst_file)
 {
-	char buf[MAXPATHLEN];
 	size_t nread;
 	size_t nwritten = 0;
 	size_t size = 0;
+	void* buf;
 
-	strncpyt(buf, dst_file, sizeof(buf));
-	make_dir(dirname(buf), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	if (!(buf = malloc(_BUF_SIZE)))
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "copying %s to %s failed - unable to allocate buffer\n", src_file, dst_file);
+		return -1;
+	}
+
+	make_dir_ex(dst_file, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 
 	FILE *fsrc = fopen(src_file, "rb");
 	FILE *fdst = fopen(dst_file, "wb");
 
-	while ((nread = fread(buf, 1, sizeof(buf), fsrc)) > 0)
+	while ((nread = fread(buf, 1, _BUF_SIZE, fsrc)) > 0)
 	{
 		size += nread;
 		nwritten += fwrite(buf, 1, nread, fdst);
@@ -344,8 +360,11 @@ copy_file(const char *src_file, const char *dst_file)
 	if (nwritten != size)
 	{
 		DPRINTF(E_WARN, L_ARTWORK, "copying %s to %s failed [%s]\n", src_file, dst_file, strerror(errno));
+		free(buf);
 		return -1;
 	}
+
+	free(buf);
 	return 0;
 }
 
@@ -357,9 +376,7 @@ link_file(const char *src_file, const char *dst_file)
 
 	if (errno == ENOENT)
 	{
-		char *dir = strdup(dst_file);
-		make_dir(dirname(dir), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-		free(dir);
+		make_dir_ex(dst_file, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 		if (link(src_file, dst_file) == 0)
 			return 0;
 		/* try a softlink if all else fails */
@@ -371,8 +388,7 @@ link_file(const char *src_file, const char *dst_file)
 }
 
 /* Simple, efficient hash function from Daniel J. Bernstein */
-unsigned int
-DJBHash(uint8_t *data, int len)
+unsigned int djb_hash(const uint8_t *data, int len)
 {
 	unsigned int hash = 5381;
 	unsigned int i = 0;
@@ -383,6 +399,44 @@ DJBHash(uint8_t *data, int len)
 	}
 
 	return hash;
+}
+
+int djb_hash_from_file(const char *path, unsigned int *hash)
+{
+	uint8_t *buf;
+	FILE *fsrc;
+	size_t nread, i;
+
+	unsigned int _hash = 5381;
+
+	if (!(buf = malloc(_BUF_SIZE)))
+	{
+		DPRINTF(E_WARN, L_ARTWORK, "DJB hash %s - unable to allocate buffer\n", path);
+		return 0;
+	}
+
+	fsrc = fopen(path, "rb");
+	if (fsrc)
+	{
+
+		while((nread = fread(buf, 1, _BUF_SIZE, fsrc)) > 0)
+		{
+			for(i = 0; i < nread; ++i)
+			{
+				_hash = ((_hash << 5) + _hash) + (buf[i]);
+			}
+		}
+
+		fclose(fsrc);
+		*hash = _hash;
+		free(buf);
+		return 1;
+	}
+	else
+	{
+		free(buf);
+		return 0;
+	}
 }
 
 const char *
@@ -408,8 +462,14 @@ mime_to_ext(const char * mime)
 				return "pcm";
 			else if( strcmp(mime+6, "3gpp") == 0 )
 				return "3gp";
+			else if( strcmp(mime+6, "ogg") == 0 )
+				return "ogg";
 			else if( strcmp(mime, "application/ogg") == 0 )
 				return "ogg";
+#ifdef HAVE_WAVPACK
+			else if ( strcmp(mime+6, "x-wavpack") == 0  )
+				return "wv";
+#endif
 			break;
 		case 'v':
 			if( strcmp(mime+6, "avi") == 0 )
@@ -451,6 +511,81 @@ mime_to_ext(const char * mime)
 	return "dat";
 }
 
+static const mime_info_t MI_MPEG = { "mp3", "audio/mpeg" };
+static const mime_info_t MI_MP4 = { "aac", "audio/mp4" };
+static const mime_info_t MI_3GPP_AUDIO = { "aac", "audio/3gpp" };
+static const mime_info_t MI_MS_WMA = { "asf", "audio/x-ms-wma" };
+static const mime_info_t MI_FLAC = { "flc", "audio/flac" };
+static const mime_info_t MI_WAV = { "wav", "audio/x-wav" };
+static const mime_info_t MI_OGG_AUDIO = { "ogg", "audio/ogg" };
+static const mime_info_t MI_L16 = { "pcm", "audio/L16" };
+#ifdef HAVE_WAVPACK
+static const mime_info_t MI_WAVPACK = { "wv", "audio/x-wavpack" };
+#endif
+
+int ext_to_mime(const char *path, mime_info_ptr *mime_info)
+{
+	const char* dot_pos = strrchr(path, '.');
+	if (dot_pos)
+	{
+		const char *slash_pos = strrchr(path, '/');
+		if (slash_pos > dot_pos) dot_pos = NULL;
+	}
+
+	if (!dot_pos)
+	{ // no file extension
+		return 0;
+	}
+
+	const char* ext = dot_pos + 1;
+
+	if( !strcasecmp(ext, "mp3") )
+	{
+		*mime_info = &MI_MPEG;
+	}
+	else if( !strcasecmp(ext, "m4a") || !strcasecmp(ext, "mp4") ||
+	         !strcasecmp(ext, "aac") || !strcasecmp(ext, "m4p") )
+	{
+		*mime_info = &MI_MP4;
+	}
+	else if( !strcasecmp(ext, "3gp") )
+	{
+		*mime_info = &MI_3GPP_AUDIO;
+	}
+	else if( !strcasecmp(ext, "wma") || !strcasecmp(ext, "asf") )
+	{
+		*mime_info = &MI_MS_WMA;
+	}
+	else if( !strcasecmp(ext, "flac") || !strcasecmp(ext, "fla") || !strcasecmp(ext, "flc") )
+	{
+		*mime_info = &MI_FLAC;
+	}
+	else if( !strcasecmp(ext, "wav") )
+	{
+		*mime_info = &MI_WAV;
+	}
+	else if( !strcasecmp(ext, "ogg") || !strcasecmp(ext, "oga") )
+	{
+		*mime_info = &MI_OGG_AUDIO;
+	}
+	else if( !strcasecmp(ext, "pcm") )
+	{
+		*mime_info = &MI_L16;
+	}
+#ifdef HAVE_WAVPACK
+	else if ( !strcasecmp(ext, "wv") )
+	{
+		*mime_info = &MI_WAVPACK;
+	}
+#endif
+	else
+	{
+		return 0;
+	}
+
+	return 1;
+} 
+
 int
 is_video(const char * file)
 {
@@ -477,6 +612,9 @@ is_audio(const char * file)
 		ends_with(file, ".m4a") || ends_with(file, ".aac")  ||
 		ends_with(file, ".mp4") || ends_with(file, ".m4p")  ||
 		ends_with(file, ".wav") || ends_with(file, ".ogg")  ||
+#ifdef HAVE_WAVPACK
+		ends_with(file, ".wv") ||
+#endif
 		ends_with(file, ".pcm") || ends_with(file, ".3gp"));
 }
 

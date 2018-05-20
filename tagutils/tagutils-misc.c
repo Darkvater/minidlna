@@ -23,7 +23,7 @@
 * Language
 **************************************************************************/
 
-#define MAX_ICONV_BUF 1024
+static const size_t MAX_ICONV_BUF = 1024;
 
 typedef enum {
 	ICONV_OK,
@@ -77,10 +77,12 @@ do_iconv(const char* to_ces, const char* from_ces,
 #endif // HAVE_ICONV
 
 #define N_LANG_ALT 8
-struct {
-	char *lang;
-	char *cpnames[N_LANG_ALT];
-} iconv_map[] = {
+typedef struct {
+	const char *lang;
+	const char *cpnames[N_LANG_ALT];
+} iconv_map_t;
+
+const iconv_map_t iconv_map[] = {
 	{ "ja_JP",     { "CP932", "CP950", "CP936", "ISO-8859-1", 0 } },
 	{ "zh_CN",  { "CP936", "CP950", "CP932", "ISO-8859-1", 0 } },
 	{ "zh_TW",  { "CP950", "CP936", "CP932", "ISO-8859-1", 0 } },
@@ -90,7 +92,7 @@ struct {
 static int lang_index = -1;
 
 static int
-_lang2cp(char *lang)
+_lang2cp(const char *lang)
 {
 	int cp;
 
@@ -180,115 +182,138 @@ _get_utf8_text(const id3_ucs4_t* native_text)
 	return utf8_text;
 }
 
+static const size_t _VC_MAX_VALUE_LEN = 1024;
+
+static inline int _strncasecmp(const char *name, const size_t name_len, const char *tag_name, const size_t tag_name_len)
+{
+	if (name_len != tag_name_len) return -1;
+	return strncasecmp(name, tag_name, tag_name_len);
+}
+
+static void _vc_assign_value(char **field, const char *value, const size_t value_len)
+{
+	if (!*field)
+	{
+		*field = strndup(value, value_len);
+	}
+	else
+	{ // append ',' and value
+		size_t field_len, new_len;
+
+		field_len = strlen(*field);
+		new_len = field_len + value_len + 2;
+
+		if (new_len > _VC_MAX_VALUE_LEN) return;
+		char *new_val = (char*)realloc(*field, new_len);
+		if (new_val)
+		{
+			new_val[field_len] = ',';
+			strncpy(new_val + field_len + 1, value, value_len);
+			new_val[new_len-1] = '\0';
+			*field = new_val;
+		}
+	}
+}
+
+static int _vc_assign_int_value(int *field, const char *value, const size_t value_len)
+{
+	char *v = strndup(value, value_len);
+	if (v) *field = atoi(v);
+	free(v);
+	return *field;
+}
 
 static void
 vc_scan(struct song_metadata *psong, const char *comment, const size_t length)
 {
-	char strbuf[1024];
+	const char *eq = (const char*)memchr(comment, '=', length);
+	size_t name_len, value_len;
+	const char *value;
 
-	if(length > (sizeof(strbuf) - 1))
-	{
-		if( strncasecmp(comment, "LYRICS=", 7) != 0 )
-		{
-			const char *eq = strchr(comment, '=');
-			int len = 8;
-			if (eq)
-				len = eq - comment;
-			DPRINTF(E_WARN, L_SCANNER, "Vorbis %.*s too long [%s]\n",
-				len, comment, psong->path);
-		}
-		return;
-	}
-	strncpy(strbuf, comment, length);
-	strbuf[length] = '\0';
+	if (!eq || (eq == comment)) return;
+	name_len = eq - comment;
+	value_len = length - (name_len+1);
+	if (!value_len || (value_len>_VC_MAX_VALUE_LEN)) return;
+	value = eq + 1;
 
-	// ALBUM, ARTIST, PUBLISHER, COPYRIGHT, DISCNUMBER, ISRC, EAN/UPN, LABEL, LABELNO,
-	// LICENSE, OPUS, SOURCEMEDIA, TITLE, TRACKNUMBER, VERSION, ENCODED-BY, ENCODING,
-	// -- following tags are muliples
-	// COMPOSER, ARRANGER, LYRICIST, AUTHOR, CONDUCTOR, PERFORMER, ENSEMBLE, PART
-	// PARTNUMBER, GENRE, DATE, LOCATION, COMMENT
-	if(!strncasecmp(strbuf, "ALBUM=", 6))
+	if (!_strncasecmp(comment, name_len, "ALBUM", 5))
 	{
-		if( *(strbuf+6) )
-			psong->album = strdup(strbuf + 6);
+		_vc_assign_value(&psong->album, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "ARTIST=", 7))
+	else if (!_strncasecmp(comment, name_len, "ARTIST", 6))
 	{
-		if( *(strbuf+7) )
-			psong->contributor[ROLE_ARTIST] = strdup(strbuf + 7);
+		_vc_assign_value(&(psong->contributor[ROLE_ARTIST]), value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "ARTISTSORT=", 11))
+	else if (!_strncasecmp(comment, name_len, "ARTISTSORT", 10))
 	{
-		psong->contributor_sort[ROLE_ARTIST] = strdup(strbuf + 11);
+		_vc_assign_value(&(psong->contributor_sort[ROLE_ARTIST]), value, value_len);
+	} 
+	else if (!_strncasecmp(comment, name_len, "ALBUMARTIST", 11))
+	{
+		_vc_assign_value(&(psong->contributor[ROLE_BAND]), value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "ALBUMARTIST=", 12))
+	else if (!_strncasecmp(comment, name_len, "ALBUMARTISTSORT", 15))
 	{
-		if( *(strbuf+12) )
-			psong->contributor[ROLE_BAND] = strdup(strbuf + 12);
+		_vc_assign_value(&(psong->contributor_sort[ROLE_BAND]), value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "ALBUMARTISTSORT=", 16))
+	else if (!_strncasecmp(comment, name_len, "TITLE", 5))
 	{
-		psong->contributor_sort[ROLE_BAND] = strdup(strbuf + 16);
+		_vc_assign_value(&psong->title, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "TITLE=", 6))
+	else if (!_strncasecmp(comment, name_len, "TRACKNUMBER", 11))
 	{
-		if( *(strbuf+6) )
-			psong->title = strdup(strbuf + 6);
+		_vc_assign_int_value(&psong->track, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "TRACKNUMBER=", 12))
+	else if (!_strncasecmp(comment, name_len, "TOTALTRACKS", 11))
 	{
-		psong->track = atoi(strbuf + 12);
+		_vc_assign_int_value(&psong->total_tracks, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "DISCNUMBER=", 11))
+	else if (!_strncasecmp(comment, name_len, "TOTALDISCS", 10))
 	{
-		psong->disc = atoi(strbuf + 11);
+		_vc_assign_int_value(&psong->total_discs, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "GENRE=", 6))
+	else if (!_strncasecmp(comment, name_len, "DISCNUMBER", 10))
 	{
-		if( *(strbuf+6) )
-			psong->genre = strdup(strbuf + 6);
+		_vc_assign_int_value(&psong->disc, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "DATE=", 5))
+	else if (!_strncasecmp(comment, name_len, "COMPOSER", 8))
 	{
-		if(length >= (5 + 10) &&
-		   isdigit(strbuf[5 + 0]) && isdigit(strbuf[5 + 1]) && ispunct(strbuf[5 + 2]) &&
-		   isdigit(strbuf[5 + 3]) && isdigit(strbuf[5 + 4]) && ispunct(strbuf[5 + 5]) &&
-		   isdigit(strbuf[5 + 6]) && isdigit(strbuf[5 + 7]) && isdigit(strbuf[5 + 8]) && isdigit(strbuf[5 + 9]))
-		{
-			// nn-nn-yyyy
-			strbuf[5 + 10] = '\0';
-			psong->year = atoi(strbuf + 5 + 6);
-		}
-		else
-		{
-			// year first. year is at most 4 digit.
-			strbuf[5 + 4] = '\0';
-			psong->year = atoi(strbuf + 5);
-		}
+		_vc_assign_value(&(psong->contributor[ROLE_COMPOSER]), value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "COMMENT=", 8))
+	else if (!_strncasecmp(comment, name_len, "CONDUCTOR", 9))
 	{
-		if( *(strbuf+8) )
-			psong->comment = strdup(strbuf + 8);
+		_vc_assign_value(&(psong->contributor[ROLE_CONDUCTOR]), value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "MUSICBRAINZ_ALBUMID=", 20))
+	else if (!_strncasecmp(comment, name_len, "GENRE", 5))
 	{
-		psong->musicbrainz_albumid = strdup(strbuf + 20);
+		_vc_assign_value(&psong->genre, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "MUSICBRAINZ_TRACKID=", 20))
+	else if (!_strncasecmp(comment, name_len, "DATE", 4) || !_strncasecmp(comment, name_len, "YEAR", 4))
 	{
-		psong->musicbrainz_trackid = strdup(strbuf + 20);
+		_vc_assign_value(&psong->date, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "MUSICBRAINZ_TRACKID=", 20))
+	else if (!_strncasecmp(comment, name_len, "COMMENT", 7))
 	{
-		psong->musicbrainz_trackid = strdup(strbuf + 20);
+		_vc_assign_value(&psong->comment, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "MUSICBRAINZ_ARTISTID=", 21))
+	else if (!_strncasecmp(comment, name_len, "DESCRIPTION", 11) || !_strncasecmp(comment, name_len, "DESC", 4))
 	{
-		psong->musicbrainz_artistid = strdup(strbuf + 21);
+		_vc_assign_value(&psong->description, value, value_len);
 	}
-	else if(!strncasecmp(strbuf, "MUSICBRAINZ_ALBUMARTISTID=", 26))
+	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_ALBUMID", 19))
 	{
-		psong->musicbrainz_albumartistid = strdup(strbuf + 26);
+		_vc_assign_value(&psong->musicbrainz_albumid, value, value_len);
+	}
+	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_TRACKID", 19))
+	{
+		_vc_assign_value(&psong->musicbrainz_trackid, value, value_len);
+	}
+	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_ARTISTID", 20))
+	{
+		_vc_assign_value(&psong->musicbrainz_artistid, value, value_len);
+	}
+	else if (!_strncasecmp(comment, name_len, "MUSICBRAINZ_ALBUMARTISTID", 25))
+	{
+		_vc_assign_value(&psong->musicbrainz_albumartistid, value, value_len);
 	}
 }

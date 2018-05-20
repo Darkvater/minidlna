@@ -46,8 +46,9 @@ typedef struct metadata_s {
 	unsigned int channels;
 	unsigned int bitrate;
 	unsigned int frequency;
-	unsigned int rotation;
-	char *       resolution;
+	unsigned int orientation;
+	unsigned int width;
+	unsigned int height;
 	char *       duration;
 	char *       date;
 	char *       mime;

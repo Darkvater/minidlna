@@ -1,7 +1,6 @@
 //=========================================================================
-// FILENAME	: tagutils-pcm.h
-//=========================================================================
-// Copyright (c) 2009- NETGEAR, Inc. All Rights Reserved.
+// FILENAME	: tagutils-wv.h
+// DESCRIPTION	: WavPack metadata reader
 //=========================================================================
 
 /* This program is free software; you can redistribute it and/or modify
@@ -18,4 +17,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-static int _get_pcmfileinfo(const char *file, struct song_metadata *psong);
+#ifdef HAVE_WAVPACK
+
+static int _get_wvfileinfo(const char *file, struct song_metadata *psong);
+static int _get_wvtags(const char *file, struct song_metadata *psong);
+
+#endif

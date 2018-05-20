@@ -510,7 +510,7 @@ _asf_load_picture(FILE *fp, int size, void *bm, int *bm_size)
 }
 
 static int
-_get_asffileinfo(char *file, struct song_metadata *psong)
+_get_asffileinfo(const char *file, struct song_metadata *psong)
 {
 	FILE *fp;
 	asf_object_t hdr;
@@ -640,7 +640,7 @@ _get_asffileinfo(char *file, struct song_metadata *psong)
 				{
 					if(_asf_load_string(fp, ValueType, ValueLength, buf, sizeof(buf)))
 						if(buf[0])
-							psong->year = atoi(buf);
+							psong->date = strdup(buf);
 				}
 				else if(!strcasecmp(buf, "WM/Director"))
 				{

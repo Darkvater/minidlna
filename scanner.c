@@ -521,7 +521,7 @@ insert_directory(const char *name, const char *path, const char *base, const cha
 		return 0;
 	}
 
-	detailID = GetFolderMetadata(name, path, NULL, NULL, find_album_art(path, NULL, 0));
+	detailID = GetFolderMetadata(name, path, NULL, NULL, album_art_add(path, NULL, 0, 0));
 	sql_exec(db, "INSERT into OBJECTS"
 	             " (OBJECT_ID, PARENT_ID, DETAIL_ID, CLASS, NAME) "
 	             "VALUES"
@@ -700,6 +700,9 @@ CreateDatabase(void)
 	sql_exec(db, "create INDEX IDX_DETAILS_ID ON DETAILS(ID);");
 	sql_exec(db, "create INDEX IDX_ALBUM_ART ON ALBUM_ART(ID);");
 	sql_exec(db, "create INDEX IDX_SCANNER_OPT ON OBJECTS(PARENT_ID, NAME, OBJECT_ID);");
+	sql_exec(db, "create INDEX IDX_ALBUM_ART_CHECKSUM ON ALBUM_ART(CHECKSUM);");
+	sql_exec(db, "create INDEX IDX_ALBUM_ART_PROFILE ON ALBUM_ART(PROFILE);");
+	sql_exec(db, "create UNIQUE INDEX IDX_ALBUM_ART_UQ ON ALBUM_ART(PARENT,PROFILE);");
 
 sql_failed:
 	if( ret != SQLITE_OK )
@@ -922,7 +925,15 @@ init_scanner()
 	setlocale(LC_COLLATE, "");
 
 	av_register_all();
+	avfilter_register_all();
 	av_log_set_level(AV_LOG_PANIC);
+}
+
+void scanner_register_av()
+{
+	av_register_all();
+        avfilter_register_all();
+        av_log_set_level(AV_LOG_PANIC);
 }
 
 static void

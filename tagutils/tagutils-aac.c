@@ -61,7 +61,7 @@ _aac_findatom(FILE *fin, long max_offset, char *which_atom, int *atom_size)
 
 // _get_aactags
 static int
-_get_aactags(char *file, struct song_metadata *psong)
+_get_aactags(const char *file, struct song_metadata *psong)
 {
 	FILE *fin;
 	long atom_offset;
@@ -129,7 +129,7 @@ _get_aactags(char *file, struct song_metadata *psong)
 			else if(!memcmp(current_atom, "\xA9" "gen", 4))
 				psong->genre = strdup((char*)&current_data[16]);
 			else if(!memcmp(current_atom, "\xA9" "day", 4))
-				psong->year = atoi((char*)&current_data[16]);
+				psong->date = strdup((char*)&current_data[16]);
 			else if(!memcmp(current_atom, "tmpo", 4))
 				psong->bpm = (current_data[16] << 8) | current_data[17];
 			else if(!memcmp(current_atom, "trkn", 4))
@@ -257,7 +257,7 @@ _aac_check_extended_descriptor(FILE *infile)
 
 // _get_aacfileinfo
 int
-_get_aacfileinfo(char *file, struct song_metadata *psong)
+_get_aacfileinfo(const char *file, struct song_metadata *psong)
 {
 	FILE *infile;
 	long atom_offset;
@@ -369,7 +369,7 @@ bad_esds:
 	if(!psong->bitrate)
 	{
 		/* Dont' scare people with this for now.  Could be Apple Lossless?
-		DPRINTF(E_DEBUG, L_SCANNER, "No 'esds' atom. Guess bitrate. [%s]\n", basename(file)); */
+		DPRINTF(E_DEBUG, L_SCANNER, "No 'esds' atom. Guess bitrate. [%s]\n", basename((char*)file)); */
 		if((atom_offset != -1) && (psong->song_length))
 		{
 			psong->bitrate = atom_length * 1000 / psong->song_length / 128;
@@ -404,7 +404,7 @@ bad_esds:
 				                             psong->channels, psong->bitrate);
 			break;
 		default:
-			DPRINTF(E_DEBUG, L_METADATA, "Unhandled AAC type %d [%s]\n", profile_id, basename(file));
+			DPRINTF(E_DEBUG, L_METADATA, "Unhandled AAC type %d [%s]\n", profile_id, basename((char*)file));
 			break;
 	}
 

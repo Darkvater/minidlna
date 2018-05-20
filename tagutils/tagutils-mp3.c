@@ -25,7 +25,7 @@
  */
 
 static int
-_get_mp3tags(char *file, struct song_metadata *psong)
+_get_mp3tags(const char *file, struct song_metadata *psong)
 {
 	struct id3_file *pid3file;
 	struct id3_tag *pid3tag;
@@ -73,7 +73,7 @@ _get_mp3tags(char *file, struct song_metadata *psong)
 		if(!strcmp(pid3frame->id, "YTCP"))   /* for id3v2.2 */
 		{
 			psong->compilation = 1;
-			DPRINTF(E_DEBUG, L_SCANNER, "Compilation: %d [%s]\n", psong->compilation, basename(file));
+			DPRINTF(E_DEBUG, L_SCANNER, "Compilation: %d [%s]\n", psong->compilation, basename((char*)file));
 		}
 		else if(!strcmp(pid3frame->id, "APIC") && !image_size)
 		{
@@ -200,9 +200,10 @@ _get_mp3tags(char *file, struct song_metadata *psong)
 					}
 					psong->track = atoi((char*)utf8_text);
 				}
-				else if(!strcmp(pid3frame->id, "TDRC"))
+				else if(!strcmp(pid3frame->id, "TDRC") || !strcmp(pid3frame->id, "TYER"))
 				{
-					psong->year = atoi((char*)utf8_text);
+					used = 1;
+					psong->date = (char*)utf8_text;
 				}
 				else if(!strcmp(pid3frame->id, "TLEN"))
 				{
@@ -540,7 +541,7 @@ _mp3_get_frame_count(FILE *infile, struct mp3_frameinfo *pfi)
 
 // _get_mp3fileinfo
 static int
-_get_mp3fileinfo(char *file, struct song_metadata *psong)
+_get_mp3fileinfo(const char *file, struct song_metadata *psong)
 {
 	FILE *infile;
 	struct id3header *pid3;
